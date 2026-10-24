@@ -95,9 +95,16 @@ export default function GameRoomPage() {
       if (currentRole === 'MASTER') {
         newSocket.emit(
           'create-room',
-          { roomId, roomName: `Stanza ${roomId}`, password: currentPassword },
+          {
+            roomId,
+            roomName: `Stanza ${roomId}`,
+            password: currentPassword,
+            // localStorage: il Master resta tale anche aprendo nuove schede
+            masterKey: localStorage.getItem(`dnd_masterkey_${roomId}`),
+          },
           (res: any) => {
             if (res?.success) {
+              localStorage.setItem(`dnd_masterkey_${roomId}`, res.masterKey);
               setRoom(res.room);
               if (res.room?.logs) {
                 db.saveLogsBulk(res.room.logs);
@@ -113,7 +120,6 @@ export default function GameRoomPage() {
           {
             roomId,
             password: currentPassword,
-            role: currentRole,
             playerName: name,
             playerColor: color,
           },

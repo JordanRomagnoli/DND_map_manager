@@ -1,4 +1,5 @@
 const { createServer } = require('http');
+const { randomUUID } = require('crypto');
 const parseUrl = require('url').parse;
 const next = require('next');
 const { Server } = require('socket.io');
@@ -12,6 +13,9 @@ const handle = app.getRequestHandler();
 
 // In-memory room store (in-sync with Supabase when configured)
 const rooms = new Map();
+
+// Stato stanza inviabile ai client: senza password né chiave del Master
+const publicRoom = ({ password, masterKey, ...room }) => room;
 
 app.prepare().then(() => {
   const httpServer = createServer((req, res) => {
@@ -70,30 +74,32 @@ app.prepare().then(() => {
     };
 
     // CREA STANZA (Master)
-    socket.on('create-room', ({ roomId, roomName, password, gridSize, gridScale }, callback) => {
+    socket.on('create-room', ({ roomId, roomName, password, masterKey, gridSize, gridScale }, callback) => {
       const cleanRoomId = (roomId || '').trim().toLowerCase();
       if (!cleanRoomId) {
         return callback?.({ success: false, error: 'Codice stanza non valido.' });
       }
 
       if (rooms.has(cleanRoomId)) {
-        // Se la stanza esiste già, controlla password
+        // Se la stanza esiste già, solo chi ha la chiave del Master può riprenderne il controllo
+        // (la password è condivisa con i giocatori, quindi non basta)
         const existing = rooms.get(cleanRoomId);
-        if (existing.password !== password) {
-          return callback?.({ success: false, error: 'Stanza già esistente con password diversa.' });
+        if (!masterKey || existing.masterKey !== masterKey) {
+          return callback?.({ success: false, error: 'Stanza già esistente: solo il Master che l\'ha creata può gestirla.' });
         }
         existing.masterSocketId = socket.id;
         socket.join(cleanRoomId);
         socket.role = 'MASTER';
         socket.roomId = cleanRoomId;
         socket.playerName = 'Master';
-        return callback?.({ success: true, room: existing });
+        return callback?.({ success: true, room: publicRoom(existing), masterKey: existing.masterKey });
       }
 
       const newRoom = {
         id: cleanRoomId,
         name: roomName || `Stanza ${cleanRoomId}`,
         password: password || '',
+        masterKey: randomUUID(),
         gridSize: gridSize || 50,
         gridScale: gridScale || 1, // Scala di default: 1 metro per quadrato
         gridVisible: true,
@@ -112,13 +118,14 @@ app.prepare().then(() => {
       socket.playerName = 'Master';
 
       console.log(`🏰 Stanza creata: ${cleanRoomId} dal Master ${socket.id}`);
-      callback?.({ success: true, room: newRoom });
+      callback?.({ success: true, room: publicRoom(newRoom), masterKey: newRoom.masterKey });
 
       createAndBroadcastLog(cleanRoomId, 'Master', 'MASTER', 'USER_JOIN', `Il Master ha creato la stanza "${newRoom.name}".`);
     });
 
-    // UNISCITI ALLA STANZA (Player o Master)
-    socket.on('join-room', ({ roomId, password, role, playerName, playerColor }, callback) => {
+    // UNISCITI ALLA STANZA (solo Player: il ruolo Master passa da create-room con la chiave)
+    socket.on('join-room', ({ roomId, password, playerName, playerColor }, callback) => {
+      const role = 'PLAYER';
       const cleanRoomId = (roomId || '').trim().toLowerCase();
       const room = rooms.get(cleanRoomId);
 
@@ -134,57 +141,53 @@ app.prepare().then(() => {
       socket.join(cleanRoomId);
       socket.role = role;
       socket.roomId = cleanRoomId;
-      socket.playerName = playerName || (role === 'MASTER' ? 'Master' : 'Giocatore');
+      socket.playerName = playerName || 'Giocatore';
 
       let playerToken = null;
 
-      if (role === 'MASTER') {
-        room.masterSocketId = socket.id;
+      // Se il giocatore non ha già un token nella stanza, ne creiamo uno
+      const existingToken = room.tokens.find(
+        (t) => t.type === 'player' && (t.ownerId === socket.id || t.name === playerName)
+      );
+
+      if (existingToken) {
+        existingToken.ownerId = socket.id;
+        playerToken = existingToken;
       } else {
-        // Se il giocatore non ha già un token nella stanza, ne creiamo uno
-        const existingToken = room.tokens.find(
-          (t) => t.type === 'player' && (t.ownerId === socket.id || t.name === playerName)
+        // Genera coordinate di spawn ancorate al centro di un quadrato della griglia
+        const spawnCol = Math.floor(Math.random() * 6 + 2);
+        const spawnRow = Math.floor(Math.random() * 6 + 2);
+        const snapped = snapToCellCenter(
+          spawnCol * room.gridSize,
+          spawnRow * room.gridSize,
+          room.gridSize
         );
 
-        if (existingToken) {
-          existingToken.ownerId = socket.id;
-          playerToken = existingToken;
-        } else {
-          // Genera coordinate di spawn ancorate al centro di un quadrato della griglia
-          const spawnCol = Math.floor(Math.random() * 6 + 2);
-          const spawnRow = Math.floor(Math.random() * 6 + 2);
-          const snapped = snapToCellCenter(
-            spawnCol * room.gridSize,
-            spawnRow * room.gridSize,
-            room.gridSize
-          );
+        playerToken = {
+          id: `player-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          name: playerName || 'Giocatore',
+          type: 'player',
+          x: snapped.x,
+          y: snapped.y,
+          color: playerColor || '#3b82f6',
+          ownerId: socket.id,
+          size: room.gridSize * 0.8,
+          hp: 20,
+          maxHp: 20,
+        };
 
-          playerToken = {
-            id: `player-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-            name: playerName || 'Giocatore',
-            type: 'player',
-            x: snapped.x,
-            y: snapped.y,
-            color: playerColor || '#3b82f6',
-            ownerId: socket.id,
-            size: room.gridSize * 0.8,
-            hp: 20,
-            maxHp: 20,
-          };
-
-          room.tokens.push(playerToken);
-          io.to(cleanRoomId).emit('token-added', playerToken);
-        }
+        room.tokens.push(playerToken);
+        io.to(cleanRoomId).emit('token-added', playerToken);
       }
 
-      socket.tokenId = playerToken?.id;
+      socket.tokenId = playerToken.id;
 
-      console.log(`👤 ${role} (${playerName || 'DM'}) si è unito alla stanza: ${cleanRoomId}`);
+      console.log(`👤 ${role} (${socket.playerName}) si è unito alla stanza: ${cleanRoomId}`);
 
       callback?.({
         success: true,
-        room,
-        assignedTokenId: playerToken?.id,
+        room: publicRoom(room),
+        assignedTokenId: playerToken.id,
       });
 
       // Notifica tutti gli altri player nella stanza
@@ -199,7 +202,7 @@ app.prepare().then(() => {
         socket.playerName,
         role,
         'USER_JOIN',
-        `${socket.playerName} (${role === 'MASTER' ? 'Master' : 'Giocatore'}) si è unito alla stanza.`
+        `${socket.playerName} (Giocatore) si è unito alla stanza.`
       );
     });
 
