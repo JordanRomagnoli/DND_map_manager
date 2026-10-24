@@ -148,11 +148,11 @@ export default function LandingPage() {
               <TabsList className="mb-6 h-13">
                 <TabsTrigger value="create">
                   <Crown size={18} className={activeTab === 'create' ? 'text-amber-400' : ''} />
-                  <span>Crea Stanza (Master)</span>
+                  <span>Crea Stanza<span className="hidden sm:inline"> (Master)</span></span>
                 </TabsTrigger>
                 <TabsTrigger value="join">
                   <User size={18} className={activeTab === 'join' ? 'text-blue-400' : ''} />
-                  <span>Unisciti (Giocatore)</span>
+                  <span>Unisciti<span className="hidden sm:inline"> (Giocatore)</span></span>
                 </TabsTrigger>
               </TabsList>
 

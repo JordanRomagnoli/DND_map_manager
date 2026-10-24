@@ -356,7 +356,7 @@ export default function GameRoomPage() {
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-slate-950">
       {/* BARRA SUPERIORE DI NAVIGAZIONE E INFORMAZIONI STANZA */}
-      <header className="absolute top-4 left-4 z-40 flex items-center gap-3">
+      <header className="absolute top-4 left-4 right-4 z-40 flex flex-wrap items-center gap-2 sm:gap-3 pointer-events-none [&>*]:pointer-events-auto">
         <Button
           variant="icon"
           onClick={() => router.push('/')}
@@ -386,7 +386,7 @@ export default function GameRoomPage() {
             ) : (
               <>
                 <Copy size={14} />
-                <span>Copia Codice</span>
+                <span className="hidden sm:inline">Copia Codice</span>
               </>
             )}
           </Button>

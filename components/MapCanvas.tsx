@@ -887,7 +887,8 @@ export default function MapCanvas({
           {hpModalToken && (
             <div className="flex flex-col gap-5">
               <DialogHeader>
-                <div className="flex items-center justify-between">
+                {/* pr-8: spazio per la X di chiusura in alto a destra */}
+                <div className="flex items-center justify-between pr-8">
                   <div className="flex items-center gap-2.5">
                     <div
                       className="w-4 h-4 rounded-full border border-white/30 shadow-sm shrink-0"

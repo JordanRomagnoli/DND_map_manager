@@ -143,7 +143,7 @@ export default function ActionLogPanel({ roomId, role, socket }: ActionLogPanelP
 
       <PopoverContent
         align="end"
-        className="w-[calc(100vw-1.5rem)] sm:w-96 p-0 bg-slate-950/95 border-slate-800 text-slate-100 shadow-2xl backdrop-blur-xl rounded-xl z-50"
+        className="w-[calc(100vw-1.5rem)] sm:w-96 p-0 bg-slate-950/95 border-slate-800 text-slate-100 shadow-2xl backdrop-blur-xl rounded-xl"
       >
 
         {/* Header del Registro */}

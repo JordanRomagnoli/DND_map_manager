@@ -18,7 +18,8 @@ interface TokenListProps {
 }
 
 export default function TokenList({ tokens, role, roomId, socket, myTokenId }: TokenListProps) {
-  const [isOpen, setIsOpen] = useState<boolean>(true);
+  // Su telefono parte chiuso: aperto coprirebbe metà della mappa
+  const [isOpen, setIsOpen] = useState<boolean>(() => typeof window === 'undefined' || window.innerWidth >= 640);
   const [filter, setFilter] = useState<'all' | 'player' | 'npc'>('all');
 
   const handleDeleteToken = (tokenId: string) => {

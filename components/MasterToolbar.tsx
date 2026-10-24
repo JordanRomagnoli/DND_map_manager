@@ -249,7 +249,7 @@ export default function MasterToolbar({
               </TooltipTrigger>
               <TooltipContent>Disegna Forme Geometriche</TooltipContent>
             </Tooltip>
-            <PopoverContent className="w-44 p-1.5 bg-slate-900/95 border-amber-500/30 backdrop-blur-xl shadow-2xl flex flex-col gap-1 z-50">
+            <PopoverContent className="w-44 p-1.5 bg-slate-900/95 border-amber-500/30 backdrop-blur-xl shadow-2xl flex flex-col gap-1">
               <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">
                 Forme Geometriche
               </div>
@@ -400,7 +400,7 @@ export default function MasterToolbar({
               </TooltipTrigger>
               <TooltipContent>Imposta Scala Griglia (Metri per quadrato)</TooltipContent>
             </Tooltip>
-            <PopoverContent className="w-52 p-2 bg-slate-900/95 border-amber-500/30 backdrop-blur-xl shadow-2xl flex flex-col gap-2 z-50 text-xs">
+            <PopoverContent className="w-52 p-2 bg-slate-900/95 border-amber-500/30 backdrop-blur-xl shadow-2xl flex flex-col gap-2 text-xs">
               <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                 Scala Griglia (Metri / Quadrato)
               </div>

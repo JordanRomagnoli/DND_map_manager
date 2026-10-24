@@ -71,7 +71,7 @@ export default function InitiativePanel({ room, role, socket, myTokenId }: Initi
           }`}
         >
           <Swords className="w-4 h-4 text-amber-400" />
-          <span className="hidden sm:inline font-medium text-xs">
+          <span className={`${initiative ? '' : 'hidden sm:inline'} font-medium text-xs`}>
             {initiative ? `Round ${initiative.round} · ${tokenName(initiative.activeTokenId)}` : 'Iniziativa'}
           </span>
         </Button>
@@ -79,7 +79,7 @@ export default function InitiativePanel({ room, role, socket, myTokenId }: Initi
 
       <PopoverContent
         align="end"
-        className="w-[calc(100vw-1.5rem)] sm:w-80 p-0 bg-slate-950/95 border-slate-800 text-slate-100 shadow-2xl backdrop-blur-xl rounded-xl z-50"
+        className="w-[calc(100vw-1.5rem)] sm:w-80 p-0 bg-slate-950/95 border-slate-800 text-slate-100 shadow-2xl backdrop-blur-xl rounded-xl"
       >
         {/* Header */}
         <div className="flex items-center justify-between p-3 border-b border-slate-800/80 bg-slate-900/50">

@@ -215,6 +215,14 @@ body {
   overflow: hidden;
 }
 
+@media (max-width: 639px) {
+  .sidebar-panel {
+    top: 128px;
+    right: 12px;
+    max-height: calc(100vh - 300px); /* lascia spazio alla scheda del giocatore in basso */
+  }
+}
+
 .sidebar-header {
   padding: 14px 18px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
