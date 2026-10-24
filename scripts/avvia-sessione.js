@@ -26,6 +26,15 @@ if (spawnSync('cloudflared', ['--version']).error) {
   );
 }
 
+// La porta deve essere libera: di solito è occupata da un "npm run dev" rimasto aperto
+const portCheck = spawnSync(process.execPath, [
+  '-e',
+  `require('net').createServer().once('error', () => process.exit(1)).listen(${PORT}, function () { this.close(); })`,
+]);
+if (portCheck.status !== 0) {
+  fail(`La porta ${PORT} è già in uso (forse c'è "npm run dev" aperto?). Chiudilo e rilancia: npm run sessione`);
+}
+
 // Data dell'ultima modifica tra i file che finiscono nella build
 const newestSourceTime = () => {
   let newest = 0;
