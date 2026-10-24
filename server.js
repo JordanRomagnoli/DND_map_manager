@@ -638,6 +638,8 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS } = {
 }
 
 if (require.main === module) {
+  // --production al posto di NODE_ENV=production: la sintassi VAR=valore non funziona nel terminale di Windows
+  if (process.argv.includes('--production')) process.env.NODE_ENV = 'production';
   const next = require('next');
 
   const dev = process.env.NODE_ENV !== 'production';
