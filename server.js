@@ -416,15 +416,7 @@ function attachSocketServer(httpServer) {
       room.tokens.push(newToken);
       io.to(masterRoom(roomId)).emit('token-added', newToken);
       io.to(roomId).except(masterRoom(roomId)).emit('token-added', hideHp(newToken));
-      callback?.({ success: true, token: newToken });
-
-      createAndBroadcastLog(
-        roomId,
-        'Master',
-        'MASTER',
-        'TOKEN_ADD',
-        `Il Master ha aggiunto il token/NPC "${newToken.name}".`
-      );
+      callback?.({ success: true, token: newToken }); // nessun log: la preparazione della scena non fa parte della giocata
     });
 
     // RIMOZIONE TOKEN (Master only)

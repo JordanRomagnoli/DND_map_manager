@@ -278,3 +278,20 @@ test('ordine dei turni, round, rimozione di pedine e fine combattimento', async 
   await wait(100);
   assert.ok(seen.has('token-moved') && !seen.has('token-moved-animated'), 'dopo il combattimento i movimenti tornano silenziosi');
 });
+
+test('la creazione di un NPC non compare nel registro', async () => {
+  const dm = client();
+  const pl = client();
+  await ack(dm, 'create-room', { roomId: 'quiet-npc', password: 'pw' });
+  await ack(pl, 'join-room', { roomId: 'quiet-npc', password: 'pw', playerName: 'Eroe' });
+  const seen = recorder(pl);
+  const masterSeen = recorder(dm);
+
+  await ack(dm, 'add-token', { tokenData: { name: 'Imboscata' } });
+  await wait(150);
+
+  assert.ok(seen.has('token-added', (d) => d.name === 'Imboscata'), 'la pedina compare sulla mappa');
+  assert.ok(!seen.has('action-logged') && !masterSeen.has('action-logged'), 'nessuna voce nel registro');
+  const back = await ack(client(), 'join-room', { roomId: 'quiet-npc', password: 'pw', playerName: 'Altro' });
+  assert.ok(!back.room.logs.some((l) => l.description.includes('Imboscata')), 'nemmeno nello storico');
+});

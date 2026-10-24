@@ -34,7 +34,6 @@ export type ActionType =
   | 'TOKEN_MOVE'
   | 'HP_UPDATE'
   | 'DRAW'
-  | 'TOKEN_ADD'
   | 'TOKEN_REMOVE'
   | 'MAP_CHANGE'
   | 'GRID_UPDATE'

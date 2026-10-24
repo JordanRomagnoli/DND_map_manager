@@ -17,7 +17,6 @@ import {
   Map,
   Grid,
   UserPlus,
-  Sparkles,
   X,
   Clock,
   Info,
@@ -81,8 +80,6 @@ export default function ActionLogPanel({ roomId, role, socket }: ActionLogPanelP
         return <HeartPulse className="w-3.5 h-3.5 text-red-400" />;
       case 'DRAW':
         return <Palette className="w-3.5 h-3.5 text-purple-400" />;
-      case 'TOKEN_ADD':
-        return <Sparkles className="w-3.5 h-3.5 text-emerald-400" />;
       case 'TOKEN_REMOVE':
         return <Trash2 className="w-3.5 h-3.5 text-amber-400" />;
       case 'MAP_CHANGE':
