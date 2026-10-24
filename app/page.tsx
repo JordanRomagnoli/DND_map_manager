@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { io } from 'socket.io-client';
 import {
   Shield,
   Crown,
@@ -58,6 +59,27 @@ export default function LandingPage() {
       setJoinRoomId(code);
     }
   }, []);
+
+  // Stanze esistenti, per rientrare senza ricordarsi il codice (chiede l'elenco al server e chiude)
+  const [existingRooms, setExistingRooms] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    const socket = io();
+    socket.emit('list-rooms', (list: { id: string; name: string }[]) => {
+      setExistingRooms(list);
+      socket.disconnect();
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  // Sceglie una stanza dall'elenco: apre la scheda giusta col codice compilato, resta da mettere la password
+  const pickRoom = (roomId: string, tab: 'create' | 'join') => {
+    setCreateRoomId(roomId);
+    setJoinRoomId(roomId);
+    setActiveTab(tab);
+    setErrorMsg('');
+  };
 
   // Error Messages
   const [errorMsg, setErrorMsg] = useState<string>('');
@@ -159,6 +181,35 @@ export default function LandingPage() {
           </CardHeader>
 
           <CardContent className="p-4 pt-2">
+            {/* Stanze esistenti: rientro veloce senza ricordarsi il codice */}
+            {existingRooms.length > 0 && (
+              <div className="mb-6 space-y-2">
+                <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Stanze esistenti</h3>
+                <div className="max-h-52 overflow-y-auto space-y-1.5">
+                  {existingRooms.map((r) => (
+                    <div
+                      key={r.id}
+                      className={`flex flex-wrap items-center gap-2 p-2 rounded-xl border bg-slate-900/60 ${
+                        r.id === joinRoomId || r.id === createRoomId ? 'border-amber-500/60' : 'border-slate-800'
+                      }`}
+                    >
+                      {/* su telefono il nome sta su una riga intera e i pulsanti sotto */}
+                      <div className="w-full sm:w-auto sm:flex-1 min-w-0 text-left">
+                        <p className="text-sm font-semibold text-slate-100 truncate">{r.name}</p>
+                        <p className="text-[11px] font-mono text-amber-300/80 truncate">#{r.id}</p>
+                      </div>
+                      <Button type="button" size="sm" variant="secondary" onClick={() => pickRoom(r.id, 'join')} className="h-8 px-2.5 text-xs gap-1 flex-1 sm:flex-none">
+                        <User size={14} /> Giocatore
+                      </Button>
+                      <Button type="button" size="sm" variant="secondary" onClick={() => pickRoom(r.id, 'create')} className="h-8 px-2.5 text-xs gap-1 flex-1 sm:flex-none">
+                        <Crown size={14} className="text-amber-400" /> Master
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Tabs ShadCN */}
             <Tabs defaultValue="create" value={activeTab} onValueChange={(val) => { setActiveTab(val); setErrorMsg(''); }}>
               <TabsList className="mb-6 h-13">

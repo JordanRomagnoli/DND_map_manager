@@ -151,6 +151,14 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       scheduleRoomCleanupIfEmpty(socket.roomId);
     };
 
+    // ELENCO STANZE per la home: codice e nome, dalla più recente. Per entrare servono comunque le password.
+    socket.on('list-rooms', (callback) => {
+      const byId = new Map((store?.list() ?? []).map((r) => [r.id, r]));
+      // stanze appena create e non ancora salvate: contano come modificate adesso
+      rooms.forEach((room) => byId.has(room.id) || byId.set(room.id, { id: room.id, name: room.name, updatedAt: Date.now() }));
+      callback?.([...byId.values()].sort((a, b) => b.updatedAt - a.updatedAt));
+    });
+
     // CREA STANZA (Master)
     socket.on('create-room', ({ roomId, roomName, password, masterKey, masterPassword, gridSize, gridScale }, callback) => {
       const cleanRoomId = (roomId || '').trim().toLowerCase();

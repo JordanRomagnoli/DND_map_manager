@@ -562,3 +562,22 @@ test('rientrando da un dispositivo nuovo il giocatore sceglie la sua pedina', as
   const fresh = await ack(client(), 'join-room', { roomId: 'pick', password: 'pw', playerName: 'Gimli', newCharacter: true });
   assert.ok(fresh.success && ![first.assignedTokenId, legolas.assignedTokenId].includes(fresh.assignedTokenId));
 });
+
+test('elenco stanze per la home: codice e nome, anche dopo un riavvio, senza dati segreti', async () => {
+  const dir = tempDir();
+  const first = await startServer({ store: createRoomStore(dir, { saveDelayMs: 20 }) });
+  await ack(first.open(), 'create-room', { roomId: 'vecchia', roomName: 'Campagna vecchia', password: 'pw', masterPassword: 'm' });
+  await wait(100);
+  await ack(first.open(), 'create-room', { roomId: 'nuova', roomName: 'Campagna nuova', password: 'pw', masterPassword: 'm' });
+  await wait(100);
+  first.stop();
+
+  const second = await startServer({ store: createRoomStore(dir) });
+  try {
+    const list = await new Promise((resolve) => second.open().emit('list-rooms', resolve));
+    assert.deepEqual(list.map((r) => [r.id, r.name]), [['nuova', 'Campagna nuova'], ['vecchia', 'Campagna vecchia']], 'dalla più recente, dal disco');
+    assert.ok(list.every((r) => Object.keys(r).sort().join() === 'id,name,updatedAt'), 'solo codice, nome e data');
+  } finally {
+    second.stop();
+  }
+});

@@ -36,6 +36,22 @@ function createRoomStore(dir, { saveDelayMs = SAVE_DELAY_MS } = {}) {
   };
 
   return {
+    // Stanze salvate per l'elenco della home: solo codice, nome e ultima modifica (niente dati segreti)
+    list() {
+      return fs
+        .readdirSync(dir)
+        .filter((f) => f.startsWith('room-') && f.endsWith('.json'))
+        .flatMap((f) => {
+          const file = path.join(dir, f);
+          try {
+            const { id, name } = JSON.parse(fs.readFileSync(file, 'utf8'));
+            return [{ id, name, updatedAt: fs.statSync(file).mtimeMs }];
+          } catch {
+            return []; // file illeggibile: già segnalato da load() quando qualcuno prova a entrare
+          }
+        });
+    },
+
     // Stanza salvata, o null se non esiste. Un file illeggibile viene segnalato e trattato come assente.
     load(roomId) {
       const file = `${fileBase(roomId)}.json`;
