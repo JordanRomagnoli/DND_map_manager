@@ -67,13 +67,3 @@ export interface RoomState {
   drawings: DrawingStroke[];
   logs?: ActionLogRecord[];
 }
-
-
-export interface JoinRoomPayload {
-  roomId: string;
-  password?: string;
-  role: UserRole;
-  playerName?: string;
-  playerColor?: string;
-}
-
