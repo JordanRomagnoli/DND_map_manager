@@ -17,6 +17,34 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
+// Disegna un tratto (a mano libera, rettangolo o cerchio); i tratti gomma usano destination-out
+function drawStroke(ctx: CanvasRenderingContext2D, stroke: DrawingStroke) {
+  const pts = stroke.points;
+  if (pts.length < 2) return;
+
+  ctx.beginPath();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.globalCompositeOperation = stroke.isEraser ? 'destination-out' : 'source-over';
+  ctx.strokeStyle = stroke.color;
+  ctx.lineWidth = stroke.width;
+
+  const [start, end] = [pts[0], pts[pts.length - 1]];
+  if (stroke.shapeType === 'rectangle') {
+    ctx.strokeRect(start.x, start.y, end.x - start.x, end.y - start.y);
+  } else if (stroke.shapeType === 'circle') {
+    ctx.arc(start.x, start.y, Math.hypot(end.x - start.x, end.y - start.y), 0, Math.PI * 2);
+    ctx.stroke();
+  } else {
+    ctx.moveTo(start.x, start.y);
+    for (let i = 1; i < pts.length; i++) {
+      ctx.lineTo(pts[i].x, pts[i].y);
+    }
+    ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
 interface MapCanvasProps {
   room: RoomState;
   role: UserRole;
@@ -128,6 +156,8 @@ export default function MapCanvas({
   // Immagine di Sfondo caricata
   const bgImageRef = useRef<HTMLImageElement | null>(null);
   const avatarImageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
+  const drawingsLayerRef = useRef<HTMLCanvasElement | null>(null);
+  const drawingsCacheRef = useRef<{ drawings: DrawingStroke[]; panX: number; panY: number; zoom: number } | null>(null);
   const [bgLoaded, setBgLoaded] = useState<boolean>(false);
 
   // Caricamento Sfondo JPG/PNG quando cambia l'URL
@@ -211,82 +241,46 @@ export default function MapCanvas({
       ctx.stroke();
     }
 
-    // 3. LAYER DISEGNO DEL MASTER (Tratti e Forme Geometriche salvate)
-    room.drawings.forEach((stroke) => {
-      if (stroke.points.length < 1) return;
-      ctx.beginPath();
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
+    // 3. LAYER DISEGNO DEL MASTER su un canvas separato: così la gomma cancella solo i disegni,
+    // non mappa e griglia. Si ridisegna solo se cambiano tratti, vista o dimensioni (o mentre si disegna).
+    if (!drawingsLayerRef.current) drawingsLayerRef.current = document.createElement('canvas');
+    const layer = drawingsLayerRef.current;
+    const cache = drawingsCacheRef.current;
+    const layerIsStale =
+      isDrawing ||
+      !cache ||
+      cache.drawings !== room.drawings ||
+      cache.panX !== pan.x ||
+      cache.panY !== pan.y ||
+      cache.zoom !== zoom ||
+      layer.width !== width ||
+      layer.height !== height;
 
-      if (stroke.isEraser) {
-        ctx.globalCompositeOperation = 'destination-out';
-        ctx.lineWidth = stroke.width;
-      } else {
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.strokeStyle = stroke.color;
-        ctx.lineWidth = stroke.width;
+    const layerCtx = layer.getContext('2d');
+    if (layerIsStale && layerCtx) {
+      layer.width = width; // reimpostare la dimensione svuota anche il canvas
+      layer.height = height;
+      layerCtx.setTransform(zoom, 0, 0, zoom, pan.x, pan.y);
+      room.drawings.forEach((stroke) => drawStroke(layerCtx, stroke));
+
+      // Anteprima del tratto o della forma geometrica in corso di disegno dal Master
+      if (isDrawing) {
+        drawStroke(layerCtx, {
+          id: 'preview',
+          points: currentStrokeRef.current,
+          color: brushColor,
+          width: activeTool === 'eraser' ? brushWidth * 1.5 : brushWidth,
+          isEraser: activeTool === 'eraser',
+          shapeType: activeTool === 'shape' ? activeShape : 'freehand',
+        });
       }
-
-      if (stroke.shapeType === 'rectangle' && stroke.points.length >= 2) {
-        const p1 = stroke.points[0];
-        const p2 = stroke.points[1];
-        ctx.strokeRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
-      } else if (stroke.shapeType === 'circle' && stroke.points.length >= 2) {
-        const center = stroke.points[0];
-        const edge = stroke.points[1];
-        const radius = Math.sqrt((edge.x - center.x) ** 2 + (edge.y - center.y) ** 2);
-        ctx.beginPath();
-        ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
-        ctx.stroke();
-      } else {
-        if (stroke.points.length < 2) return;
-        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-        for (let i = 1; i < stroke.points.length; i++) {
-          ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
-        }
-        ctx.stroke();
-      }
-      ctx.globalCompositeOperation = 'source-over';
-    });
-
-    // Anteprima del tratto o della forma geometrica in corso di disegno dal Master
-    if (isDrawing && currentStrokeRef.current.length >= 1) {
-      ctx.beginPath();
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-
-      if (activeTool === 'eraser') {
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = brushWidth * 1.5;
-      } else {
-        ctx.strokeStyle = brushColor;
-        ctx.lineWidth = brushWidth;
-      }
-
-      const pts = currentStrokeRef.current;
-      if (activeTool === 'shape') {
-        if (pts.length >= 2) {
-          const start = pts[0];
-          const end = pts[pts.length - 1];
-          if (activeShape === 'rectangle') {
-            ctx.strokeRect(start.x, start.y, end.x - start.x, end.y - start.y);
-          } else if (activeShape === 'circle') {
-            const radius = Math.sqrt((end.x - start.x) ** 2 + (end.y - start.y) ** 2);
-            ctx.beginPath();
-            ctx.arc(start.x, start.y, radius, 0, Math.PI * 2);
-            ctx.stroke();
-          }
-        }
-      } else {
-        if (pts.length > 1) {
-          ctx.moveTo(pts[0].x, pts[0].y);
-          for (let i = 1; i < pts.length; i++) {
-            ctx.lineTo(pts[i].x, pts[i].y);
-          }
-          ctx.stroke();
-        }
-      }
+      drawingsCacheRef.current = isDrawing ? null : { drawings: room.drawings, panX: pan.x, panY: pan.y, zoom };
     }
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(layer, 0, 0);
+    ctx.restore();
 
     // 3.5 LAYER FEEDBACK VISIVO MOVIMENTO LOCALE (Solo per il controllore durante il drag)
     if (draggedTokenId && dragStartPosRef.current && localDragPosRef.current) {
