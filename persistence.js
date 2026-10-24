@@ -36,24 +36,20 @@ function createRoomStore(dir, { saveDelayMs = SAVE_DELAY_MS } = {}) {
   };
 
   return {
-    // Stanze salvate; un file illeggibile viene segnalato e ignorato, senza bloccare l'avvio
-    loadAll() {
-      return fs
-        .readdirSync(dir)
-        .filter((f) => f.startsWith('room-') && f.endsWith('.json'))
-        .map((f) => {
-          try {
-            const data = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
-            const bgFile = path.join(dir, f.replace(/\.json$/, '.bg'));
-            const backgroundUrl = fs.existsSync(bgFile) ? fs.readFileSync(bgFile, 'utf8') : null;
-            savedBackgrounds.set(data.id, backgroundUrl);
-            return { ...data, backgroundUrl, playerKeys: new Map(data.playerKeys) };
-          } catch (err) {
-            console.error(`Stanza salvata non leggibile, ignorata: ${f}`, err);
-            return null;
-          }
-        })
-        .filter(Boolean);
+    // Stanza salvata, o null se non esiste. Un file illeggibile viene segnalato e trattato come assente.
+    load(roomId) {
+      const file = `${fileBase(roomId)}.json`;
+      if (!fs.existsSync(file)) return null;
+      try {
+        const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+        const bgFile = `${fileBase(roomId)}.bg`;
+        const backgroundUrl = fs.existsSync(bgFile) ? fs.readFileSync(bgFile, 'utf8') : null;
+        savedBackgrounds.set(roomId, backgroundUrl);
+        return { ...data, backgroundUrl, playerKeys: new Map(data.playerKeys) };
+      } catch (err) {
+        console.error(`Stanza salvata non leggibile, ignorata: ${file}`, err);
+        return null;
+      }
     },
 
     // Salva la stanza al massimo una volta ogni saveDelayMs: modifiche ravvicinate = una scrittura sola
@@ -65,14 +61,6 @@ function createRoomStore(dir, { saveDelayMs = SAVE_DELAY_MS } = {}) {
       }, saveDelayMs);
       timer.unref();
       pending.set(room.id, { room, timer });
-    },
-
-    remove(roomId) {
-      clearTimeout(pending.get(roomId)?.timer);
-      pending.delete(roomId);
-      savedBackgrounds.delete(roomId);
-      fs.rmSync(`${fileBase(roomId)}.json`, { force: true });
-      fs.rmSync(`${fileBase(roomId)}.bg`, { force: true });
     },
 
     // Scrive subito i salvataggi in attesa (alla chiusura del server)

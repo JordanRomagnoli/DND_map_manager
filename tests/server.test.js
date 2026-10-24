@@ -407,26 +407,40 @@ test("dopo un riavvio la stanza torna com'era, con ruoli e pedine", async () => 
   }
 });
 
-test('su disco: stanze cancellate rimosse, codici strani al sicuro, file corrotti ignorati', async () => {
+test('una stanza abbandonata esce dalla memoria ma resta su disco e si ricarica al rientro', async () => {
   const dir = tempDir();
-  fs.writeFileSync(path.join(dir, 'room-rotto.json'), '{ non è json');
-
   const srv = await startServer({ store: createRoomStore(dir, { saveDelayMs: 20 }), roomIdleTtlMs: 150 });
+  const fileOf = (roomId) => path.join(dir, `room-${Buffer.from(roomId).toString('base64url')}.json`);
   try {
-    const dm = srv.open();
-    const made = await ack(dm, 'create-room', { roomId: '../con', password: 'pw' });
-    assert.ok(made.success, "il file corrotto non blocca l'avvio");
-    dm.emit('update-background', { backgroundUrl: 'data:image/jpeg;base64,AAAA' });
-    await wait(100);
+    // due stanze abbandonate; il codice "../con" non deve uscire dalla cartella né usare nomi riservati
+    for (const roomId of ['../con', 'pausa']) {
+      const dm = srv.open();
+      const { masterKey } = await ack(dm, 'create-room', { roomId, password: 'pw' });
+      await ack(dm, 'add-token', { tokenData: { name: `Orco di ${roomId}` } });
+      await wait(100);
+      dm.disconnect();
+      fs.writeFileSync(path.join(dir, `${Buffer.from(roomId).toString('base64url')}.key`), masterKey);
+    }
+    await wait(400); // oltre l'attesa: entrambe tolte dalla memoria
 
-    const files = fs.readdirSync(dir).filter((f) => f !== 'room-rotto.json');
-    assert.equal(files.length, 2, 'json + mappa');
-    assert.ok(files.every((f) => f.startsWith('room-') && !f.includes('..')), 'nomi file sicuri');
-    assert.equal(fs.readdirSync(path.dirname(dir)).includes('con'), false, 'niente fuori dalla cartella');
+    assert.ok(fs.readdirSync(dir).every((f) => !f.includes('..') && !/^con/i.test(f)), 'nomi file sicuri');
+    assert.equal(fs.existsSync(path.join(path.dirname(dir), 'con.json')), false, 'niente fuori dalla cartella');
 
-    dm.disconnect();
-    await wait(400);
-    assert.deepEqual(fs.readdirSync(dir), ['room-rotto.json'], 'stanza abbandonata cancellata anche dal disco');
+    // "pausa" è ancora su disco e torna intera al rientro del Master
+    assert.ok(fs.existsSync(fileOf('pausa')), 'file ancora su disco');
+    const masterKey = fs.readFileSync(path.join(dir, `${Buffer.from('pausa').toString('base64url')}.key`), 'utf8');
+    const back = await ack(srv.open(), 'create-room', { roomId: 'pausa', masterKey });
+    assert.ok(back.success && back.room.tokens.some((t) => t.name === 'Orco di pausa'), 'stanza ricaricata dal disco');
+
+    // "../con" era davvero uscita dalla memoria: senza file non esiste più
+    fs.rmSync(fileOf('../con'));
+    const gone = await ack(srv.open(), 'join-room', { roomId: '../con', password: 'pw', playerName: 'X' });
+    assert.equal(gone.success, false, 'non era più in memoria');
+
+    // un file corrotto viene ignorato senza bloccare il server: la stanza risulta inesistente
+    fs.writeFileSync(fileOf('rotta'), '{ non è json');
+    const broken = await ack(srv.open(), 'join-room', { roomId: 'rotta', password: 'pw', playerName: 'X' });
+    assert.equal(broken.success, false);
   } finally {
     srv.stop();
   }

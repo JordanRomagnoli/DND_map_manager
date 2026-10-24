@@ -61,10 +61,19 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
     maxHttpBufferSize: 1e7, // 10MB to accommodate image uploads via socket
   });
 
-  // Stato delle stanze in memoria (copia di lavoro); con lo store viene ricaricato dal disco all'avvio
-  const rooms = new Map((store?.loadAll() ?? []).map((room) => [room.id, room]));
+  // Stanze attive in memoria (copia di lavoro). Con lo store, una stanza non in memoria viene
+  // caricata dal disco la prima volta che qualcuno ci entra (anche dopo un riavvio).
+  const rooms = new Map();
+  const getRoom = (roomId) => {
+    if (!rooms.has(roomId) && store) {
+      const saved = store.load(roomId);
+      if (saved) rooms.set(roomId, saved);
+    }
+    return rooms.get(roomId);
+  };
 
-  // Pulizia delle stanze abbandonate, altrimenti restano per sempre (in memoria e su disco)
+  // Le stanze abbandonate vengono tolte dalla memoria, altrimenti ci restano fino al riavvio.
+  // Su disco restano: la campagna non si perde, al rientro viene ricaricata.
   // Allo scadere ricontrolla: se nel frattempo qualcuno è rientrato la stanza resta.
   const cleanupTimers = new Map(); // roomId -> timeout
   const scheduleRoomCleanupIfEmpty = (roomId) => {
@@ -72,16 +81,11 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
     clearTimeout(cleanupTimers.get(roomId)); // ogni nuova uscita fa ripartire l'attesa da capo
     const timer = setTimeout(() => {
       cleanupTimers.delete(roomId);
-      if (io.sockets.adapter.rooms.get(roomId)?.size) return;
-      rooms.delete(roomId);
-      store?.remove(roomId);
+      if (!io.sockets.adapter.rooms.get(roomId)?.size) rooms.delete(roomId);
     }, roomIdleTtlMs);
     timer.unref(); // non tiene acceso il processo
     cleanupTimers.set(roomId, timer);
   };
-
-  // Le stanze ricaricate dal disco sono vuote: partono subito con l'attesa per la pulizia
-  rooms.forEach((_, roomId) => scheduleRoomCleanupIfEmpty(roomId));
 
   io.on('connection', (socket) => {
     console.log(`🔌 Connesso socket: ${socket.id}`);
@@ -153,10 +157,10 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
         return callback?.({ success: false, error: 'Codice stanza non valido.' });
       }
 
-      if (rooms.has(cleanRoomId)) {
+      const existing = getRoom(cleanRoomId);
+      if (existing) {
         // Se la stanza esiste già, solo chi ha la chiave del Master può riprenderne il controllo
         // (la password è condivisa con i giocatori, quindi non basta)
-        const existing = rooms.get(cleanRoomId);
         if (!masterKey || existing.masterKey !== masterKey) {
           return callback?.({ success: false, error: 'Stanza già esistente: solo il Master che l\'ha creata può gestirla.' });
         }
@@ -201,7 +205,7 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
     socket.on('join-room', ({ roomId, password, playerKey, playerName, playerColor }, callback) => {
       const role = 'PLAYER';
       const cleanRoomId = (roomId || '').trim().toLowerCase();
-      const room = rooms.get(cleanRoomId);
+      const room = getRoom(cleanRoomId);
 
       if (!room) {
         return callback?.({ success: false, error: `La stanza "${cleanRoomId}" non esiste.` });
@@ -672,7 +676,7 @@ if (require.main === module) {
       handle(req, res, parsedUrl);
     });
 
-    // Le stanze vengono salvate in data/rooms e ricaricate all'avvio
+    // Le stanze vengono salvate in data/rooms e ricaricate quando qualcuno ci rientra
     const store = createRoomStore(path.join(__dirname, 'data', 'rooms'));
     attachSocketServer(httpServer, { store });
 
