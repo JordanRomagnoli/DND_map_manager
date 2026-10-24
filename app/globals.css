@@ -178,7 +178,7 @@ body {
 /* Floating Toolbar */
 .toolbar-floating {
   position: absolute;
-  top: 20px;
+  bottom: 20px; /* in basso: in alto coprirebbe i pulsanti dell'header (registro, iniziativa) */
   left: 50%;
   transform: translateX(-50%);
   z-index: 100;
