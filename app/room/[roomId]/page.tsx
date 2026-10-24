@@ -246,12 +246,13 @@ export default function GameRoomPage() {
       });
     });
 
-    newSocket.on('grid-updated', ({ gridSize, gridVisible, snapToGrid }) => {
+    newSocket.on('grid-updated', ({ gridSize, gridScale, gridVisible, snapToGrid }) => {
       setRoom((prev) => {
         if (!prev) return null;
         return {
           ...prev,
           gridSize: gridSize ?? prev.gridSize,
+          gridScale: gridScale ?? prev.gridScale,
           gridVisible: gridVisible ?? prev.gridVisible,
           snapToGrid: snapToGrid ?? prev.snapToGrid,
         };
