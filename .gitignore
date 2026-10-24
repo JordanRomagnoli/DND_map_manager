@@ -1,0 +1,20 @@
+# dipendenze
+node_modules/
+
+# build di Next.js
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# variabili d'ambiente (.env.example resta nel repo)
+.env
+.env*.local
+
+# impostazioni locali di Claude Code
+.claude/settings.local.json
+
+# log e file di sistema
+npm-debug.log*
+.DS_Store
+Thumbs.db
