@@ -295,3 +295,50 @@ test('la creazione di un NPC non compare nel registro', async () => {
   const back = await ack(client(), 'join-room', { roomId: 'quiet-npc', password: 'pw', playerName: 'Altro' });
   assert.ok(!back.room.logs.some((l) => l.description.includes('Imboscata')), 'nemmeno nello storico');
 });
+
+test('le stanze abbandonate vengono cancellate, quelle ancora in uso no', async () => {
+  // secondo server con attesa breve: in produzione sono 6 ore
+  const shortServer = createServer();
+  const shortIo = attachSocketServer(shortServer, { roomIdleTtlMs: 150 });
+  await new Promise((resolve) => shortServer.listen(0, resolve));
+  const shortUrl = `http://localhost:${shortServer.address().port}`;
+  const open = () => connect(shortUrl, { forceNew: true });
+  const exists = async (roomId) => {
+    const probe = open();
+    const res = await ack(probe, 'join-room', { roomId, password: 'pw', playerName: 'Sonda' });
+    probe.disconnect();
+    return res.success;
+  };
+
+  try {
+    // 1. abbandonata: il Master esce e nessuno rientra
+    const dm1 = open();
+    await ack(dm1, 'create-room', { roomId: 'idle-gone', password: 'pw' });
+    dm1.disconnect();
+    await wait(400);
+    assert.equal(await exists('idle-gone'), false, 'stanza vuota cancellata dopo l\'attesa');
+
+    // 2. ancora in uso: il Master esce ma un giocatore resta
+    const dm2 = open();
+    const stay = open();
+    await ack(dm2, 'create-room', { roomId: 'idle-busy', password: 'pw' });
+    await ack(stay, 'join-room', { roomId: 'idle-busy', password: 'pw', playerName: 'Resto' });
+    dm2.disconnect();
+    await wait(400);
+    assert.equal(await exists('idle-busy'), true, 'stanza con qualcuno dentro non cancellata');
+    stay.disconnect();
+
+    // 3. rientro in tempo: il timer si annulla
+    const dm3 = open();
+    const { masterKey } = await ack(dm3, 'create-room', { roomId: 'idle-back', password: 'pw' });
+    dm3.disconnect();
+    await wait(50);
+    const back = open();
+    assert.ok((await ack(back, 'create-room', { roomId: 'idle-back', masterKey })).success, 'rientro prima della scadenza');
+    await wait(400);
+    assert.equal(await exists('idle-back'), true, 'stanza salvata dal rientro');
+    back.disconnect();
+  } finally {
+    shortIo.close();
+  }
+});

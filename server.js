@@ -49,14 +49,31 @@ const sortInitiativeEntries = (room, entries) => {
     .sort((a, b) => b.value - a.value);
 };
 
+// Una stanza rimasta senza nessuno connesso viene cancellata dopo questo tempo (se nessuno rientra)
+const ROOM_IDLE_TTL_MS = 6 * 60 * 60 * 1000;
+
 // Collega socket.io e tutta la logica delle stanze a un server HTTP (usato da main e dai test)
-function attachSocketServer(httpServer) {
+function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS } = {}) {
   const io = new Server(httpServer, {
     cors: {
       origin: '*',
     },
     maxHttpBufferSize: 1e7, // 10MB to accommodate image uploads via socket
   });
+
+  // Pulizia delle stanze abbandonate, altrimenti restano in memoria (con mappe e avatar) fino al riavvio
+  // Allo scadere ricontrolla: se nel frattempo qualcuno è rientrato la stanza resta.
+  const cleanupTimers = new Map(); // roomId -> timeout
+  const scheduleRoomCleanupIfEmpty = (roomId) => {
+    if (!rooms.has(roomId) || io.sockets.adapter.rooms.get(roomId)?.size) return;
+    clearTimeout(cleanupTimers.get(roomId)); // ogni nuova uscita fa ripartire l'attesa da capo
+    const timer = setTimeout(() => {
+      cleanupTimers.delete(roomId);
+      if (!io.sockets.adapter.rooms.get(roomId)?.size) rooms.delete(roomId);
+    }, roomIdleTtlMs);
+    timer.unref(); // non tiene acceso il processo
+    cleanupTimers.set(roomId, timer);
+  };
 
   io.on('connection', (socket) => {
     console.log(`🔌 Connesso socket: ${socket.id}`);
@@ -109,6 +126,7 @@ function attachSocketServer(httpServer) {
       if (!socket.roomId) return;
       socket.leave(socket.roomId);
       socket.leave(masterRoom(socket.roomId));
+      scheduleRoomCleanupIfEmpty(socket.roomId);
     };
 
     // CREA STANZA (Master)
@@ -611,6 +629,8 @@ function attachSocketServer(httpServer) {
     // DISCONNESSIONE
     socket.on('disconnect', () => {
       console.log(`❌ Disconnesso socket: ${socket.id}`);
+      // a questo punto il socket è già uscito dalle sue stanze
+      if (socket.roomId) scheduleRoomCleanupIfEmpty(socket.roomId);
     });
   });
 
