@@ -21,7 +21,7 @@ const fail = (message) => {
 if (spawnSync('cloudflared', ['--version']).error) {
   fail(
     'cloudflared non è installato. Installalo una volta con:\n\n' +
-      '    winget install --id Cloudflare.cloudflared\n\n' +
+      `    ${process.platform === 'darwin' ? 'brew install cloudflared' : 'winget install --id Cloudflare.cloudflared'}\n\n` +
       'poi chiudi e riapri il terminale e rilancia: npm run sessione'
   );
 }
