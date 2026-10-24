@@ -6,7 +6,7 @@ const { Server } = require('socket.io');
 const { createRoomStore } = require('./persistence');
 
 // Stato stanza inviabile ai client: senza password né chiave del Master
-const publicRoom = ({ password, masterKey, playerKeys, ...room }) => room;
+const publicRoom = ({ password, masterKey, masterPassword, playerKeys, ...room }) => room;
 
 // Gli HP li vedono solo il Master e il proprietario della pedina: il server non li invia agli altri
 const masterRoom = (roomId) => `${roomId}:master`;
@@ -152,7 +152,7 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
     };
 
     // CREA STANZA (Master)
-    socket.on('create-room', ({ roomId, roomName, password, masterKey, gridSize, gridScale }, callback) => {
+    socket.on('create-room', ({ roomId, roomName, password, masterKey, masterPassword, gridSize, gridScale }, callback) => {
       const cleanRoomId = (roomId || '').trim().toLowerCase();
       if (!cleanRoomId) {
         return callback?.({ success: false, error: 'Codice stanza non valido.' });
@@ -160,10 +160,22 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
 
       const existing = getRoom(cleanRoomId);
       if (existing) {
-        // Se la stanza esiste già, solo chi ha la chiave del Master può riprenderne il controllo
-        // (la password è condivisa con i giocatori, quindi non basta)
-        if (!masterKey || existing.masterKey !== masterKey) {
-          return callback?.({ success: false, error: 'Stanza già esistente: solo il Master che l\'ha creata può gestirla.' });
+        // Rientro del Master: con la chiave salvata nel browser, oppure con la password del Master da
+        // qualsiasi dispositivo. La password della stanza è condivisa con i giocatori, quindi non basta.
+        const attemptKey = `${socket.handshake.address}|${cleanRoomId}`;
+        if (isJoinBlocked(attemptKey)) {
+          return callback?.({ success: false, error: 'Troppi tentativi errati. Riprova tra qualche minuto.' });
+        }
+        const byKey = Boolean(masterKey) && existing.masterKey === masterKey;
+        const byPassword = Boolean(masterPassword) && existing.masterPassword === masterPassword;
+        if (!byKey && !byPassword) {
+          if (masterPassword) recordFailedJoin(attemptKey);
+          return callback?.({
+            success: false,
+            error: masterPassword
+              ? 'Password del Master errata.'
+              : 'Questa stanza esiste già: per gestirla serve la password del Master.',
+          });
         }
         leaveCurrentRoom();
         socket.join([cleanRoomId, masterRoom(cleanRoomId)]);
@@ -178,6 +190,7 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
         name: roomName || `Stanza ${cleanRoomId}`,
         password: password || '',
         masterKey: randomUUID(),
+        masterPassword: masterPassword || '', // per rientrare come Master da qualsiasi dispositivo
         playerKeys: new Map(), // chiave segreta del giocatore -> id della sua pedina
         gridSize: gridSize || 50,
         gridScale: gridScale || 1, // Scala di default: 1 metro per quadrato
@@ -204,7 +217,9 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
     });
 
     // UNISCITI ALLA STANZA (solo Player: il ruolo Master passa da create-room con la chiave)
-    socket.on('join-room', ({ roomId, password, playerKey, playerName, playerColor }, callback) => {
+    // Senza una pedina legata alla sua chiave, il giocatore sceglie tra le pedine giocatore libere
+    // (claimTokenId) o ne crea una nuova (newCharacter): così la ritrova anche da un altro dispositivo.
+    socket.on('join-room', ({ roomId, password, playerKey, playerName, playerColor, claimTokenId, newCharacter }, callback) => {
       const role = 'PLAYER';
       const cleanRoomId = (roomId || '').trim().toLowerCase();
       const room = getRoom(cleanRoomId);
@@ -223,6 +238,35 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
         return callback?.({ success: false, error: 'Password errata.' });
       }
 
+      // La pedina si ritrova con la chiave del giocatore, non col nome (due giocatori possono chiamarsi uguale)
+      const key = typeof playerKey === 'string' && playerKey ? playerKey : randomUUID();
+      let existingToken = room.tokens.find((t) => t.id === room.playerKeys.get(key));
+
+      // Una pedina è "in uso" se il suo proprietario è collegato a questa stanza
+      const isInUse = (token) => {
+        const owner = io.sockets.sockets.get(token.ownerId);
+        return Boolean(owner?.connected && owner.roomId === cleanRoomId && owner.id !== socket.id);
+      };
+      if (!existingToken && claimTokenId) {
+        const claimed = room.tokens.find((t) => t.id === claimTokenId && t.type === 'player');
+        if (!claimed || isInUse(claimed)) {
+          return callback?.({ success: false, error: 'Questa pedina non è disponibile: la sta già usando un altro giocatore.' });
+        }
+        // una pedina ha un solo proprietario: le chiavi vecchie che puntavano a lei non valgono più
+        for (const [k, tokenId] of room.playerKeys) if (tokenId === claimed.id) room.playerKeys.delete(k);
+        room.playerKeys.set(key, claimed.id);
+        existingToken = claimed;
+      }
+      if (!existingToken && !newCharacter) {
+        const free = room.tokens.filter((t) => t.type === 'player' && !isInUse(t));
+        if (free.length > 0) {
+          return callback?.({
+            success: false,
+            chooseToken: free.map(({ id, name, color, avatarUrl }) => ({ id, name, color, avatarUrl })),
+          });
+        }
+      }
+
       leaveCurrentRoom(); // copre anche l'ex Master che rientra come giocatore nella stessa stanza
       socket.join(cleanRoomId);
       socket.role = role;
@@ -230,10 +274,6 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       socket.playerName = playerName || 'Giocatore';
 
       let playerToken = null;
-
-      // La pedina si ritrova con la chiave del giocatore, non col nome (due giocatori possono chiamarsi uguale)
-      const key = typeof playerKey === 'string' && playerKey ? playerKey : randomUUID();
-      const existingToken = room.tokens.find((t) => t.id === room.playerKeys.get(key));
 
       if (existingToken) {
         existingToken.ownerId = socket.id;

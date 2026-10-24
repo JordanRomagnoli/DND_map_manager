@@ -499,3 +499,66 @@ test('gli ingaggi compaiono nel registro azioni', async () => {
 
   assert.deepEqual(logs, ['"Aragorn" ingaggia "Orco".', '"Aragorn" e "Orco" non sono più in combattimento.']);
 });
+
+test("il Master rientra con la sua password da un altro dispositivo, nessun altro", async () => {
+  await ack(client(), 'create-room', { roomId: 'mpw', password: 'pw', masterPassword: 'drago' });
+
+  const noKey = await ack(client(), 'create-room', { roomId: 'mpw' });
+  assert.equal(noKey.success, false);
+  assert.match(noKey.error, /password del Master/);
+
+  const roomPw = await ack(client(), 'create-room', { roomId: 'mpw', masterPassword: 'pw' });
+  assert.equal(roomPw.success, false, 'la password della stanza non basta');
+
+  const newDevice = client();
+  const back = await ack(newDevice, 'create-room', { roomId: 'mpw', masterPassword: 'drago' });
+  assert.ok(back.success, 'password del Master giusta da un dispositivo nuovo');
+  assert.equal(typeof back.masterKey, 'string', 'riceve la chiave per i rientri automatici');
+  assert.ok(!('masterPassword' in back.room), 'la password del Master non viene inviata');
+  const npc = await ack(newDevice, 'add-token', { tokenData: { name: 'Prova' } });
+  assert.ok(npc.success, 'ha i poteri del Master');
+});
+
+test('la password del Master ha lo stesso limite ai tentativi', async () => {
+  await ack(client(), 'create-room', { roomId: 'mpw-brute', password: 'pw', masterPassword: 'giusta' });
+  for (let i = 0; i < 10; i++) await ack(client(), 'create-room', { roomId: 'mpw-brute', masterPassword: `prova${i}` });
+  const blocked = await ack(client(), 'create-room', { roomId: 'mpw-brute', masterPassword: 'giusta' });
+  assert.equal(blocked.success, false);
+  assert.match(blocked.error, /Troppi tentativi/);
+});
+
+test('rientrando da un dispositivo nuovo il giocatore sceglie la sua pedina', async () => {
+  const dm = client();
+  await ack(dm, 'create-room', { roomId: 'pick', password: 'pw', masterPassword: 'm' });
+  await ack(dm, 'add-token', { tokenData: { name: 'Orco' } }); // gli NPC non si possono scegliere
+
+  // prima sessione: Aragorn e Legolas, poi Aragorn chiude
+  const oldPhone = client();
+  const first = await ack(oldPhone, 'join-room', { roomId: 'pick', password: 'pw', playerName: 'Aragorn' });
+  const elf = client();
+  const legolas = await ack(elf, 'join-room', { roomId: 'pick', password: 'pw', playerName: 'Legolas', newCharacter: true });
+  oldPhone.disconnect();
+  await wait(100);
+
+  // telefono nuovo (nessuna chiave): vede solo le pedine giocatore libere
+  const newPhone = client();
+  const ask = await ack(newPhone, 'join-room', { roomId: 'pick', password: 'pw', playerName: 'Aragorn' });
+  assert.equal(ask.success, false);
+  assert.deepEqual(ask.chooseToken.map((t) => t.name), ['Aragorn'], 'Legolas è collegato, l\'Orco è un NPC');
+
+  const taken = await ack(newPhone, 'join-room', { roomId: 'pick', password: 'pw', claimTokenId: legolas.assignedTokenId });
+  assert.equal(taken.success, false, 'non si prende una pedina in uso');
+
+  const back = await ack(newPhone, 'join-room', { roomId: 'pick', password: 'pw', claimTokenId: first.assignedTokenId });
+  assert.ok(back.success);
+  assert.equal(back.assignedTokenId, first.assignedTokenId, 'ha ritrovato la sua pedina');
+  assert.equal(back.room.tokens.find((t) => t.id === first.assignedTokenId).hp, 20, 'con i suoi HP');
+
+  // la chiave del vecchio telefono non vale più: non può riprendersi la pedina
+  const stale = await ack(client(), 'join-room', { roomId: 'pick', password: 'pw', playerKey: first.playerKey, playerName: 'X' });
+  assert.notEqual(stale.assignedTokenId, first.assignedTokenId);
+
+  // "Nuovo personaggio" crea comunque una pedina nuova
+  const fresh = await ack(client(), 'join-room', { roomId: 'pick', password: 'pw', playerName: 'Gimli', newCharacter: true });
+  assert.ok(fresh.success && ![first.assignedTokenId, legolas.assignedTokenId].includes(fresh.assignedTokenId));
+});

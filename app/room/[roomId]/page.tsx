@@ -42,6 +42,10 @@ export default function GameRoomPage() {
   const [promptPassword, setPromptPassword] = useState<boolean>(false);
   const [inputPassword, setInputPassword] = useState<string>('');
 
+  // Rientro da un dispositivo nuovo: il server propone le pedine giocatore libere tra cui scegliere
+  const [tokenChoices, setTokenChoices] = useState<Pick<Token, 'id' | 'name' | 'color' | 'avatarUrl'>[] | null>(null);
+  const joinRoomRef = useRef<(choice: { claimTokenId?: string; newCharacter?: boolean }) => void>(() => {});
+
   // Stato per attivare il centraggio telecamera sul proprio Token
   const [centerTokenTrigger, setCenterTokenTrigger] = useState<number>(0);
 
@@ -65,7 +69,11 @@ export default function GameRoomPage() {
     db.purgeExpiredLogs();
 
     // Recupera parametri da URL o SessionStorage
-    const urlRole = (searchParams.get('role') as UserRole) || sessionStorage.getItem(`dnd_role_${roomId}`) || 'PLAYER';
+    // Un browser che ha già la chiave del Master per questa stanza rientra come Master (es. link dai preferiti)
+    const urlRole =
+      (searchParams.get('role') as UserRole) ||
+      sessionStorage.getItem(`dnd_role_${roomId}`) ||
+      (localStorage.getItem(`dnd_masterkey_${roomId}`) ? 'MASTER' : 'PLAYER');
     // La password non si legge mai dall'URL: solo da sessionStorage o dal form
     const storedPassword = sessionStorage.getItem(`dnd_password_${roomId}`) || '';
     const urlName = searchParams.get('name') || sessionStorage.getItem(`dnd_name_${roomId}`) || 'Giocatore';
@@ -116,6 +124,8 @@ export default function GameRoomPage() {
             password: currentPassword,
             // localStorage: il Master resta tale anche aprendo nuove schede
             masterKey: localStorage.getItem(`dnd_masterkey_${roomId}`),
+            // password del Master: per rientrare da un dispositivo senza chiave
+            masterPassword: sessionStorage.getItem(`dnd_masterpw_${roomId}`),
           },
           (res: any) => {
             if (res?.success) {
@@ -131,7 +141,8 @@ export default function GameRoomPage() {
           }
         );
       } else {
-        newSocket.emit(
+        // choice: pedina scelta dall'elenco (claimTokenId) o nuovo personaggio, dopo la richiesta del server
+        joinRoomRef.current = (choice) => newSocket.emit(
           'join-room',
           {
             roomId,
@@ -139,8 +150,14 @@ export default function GameRoomPage() {
             playerKey: localStorage.getItem(`dnd_playerkey_${roomId}`),
             playerName: name,
             playerColor: color,
+            ...choice,
           },
           (res: any) => {
+            if (res?.chooseToken) {
+              setTokenChoices(res.chooseToken);
+              return;
+            }
+            setTokenChoices(null);
             if (res?.success) {
               localStorage.setItem(`dnd_playerkey_${roomId}`, res.playerKey);
               setRoom(res.room);
@@ -156,6 +173,7 @@ export default function GameRoomPage() {
             }
           }
         );
+        joinRoomRef.current({});
       }
     });
 
@@ -287,6 +305,12 @@ export default function GameRoomPage() {
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputPassword.trim()) return;
+    if (role === 'MASTER') {
+      // al Master il form chiede la password del Master (quella della stanza serve solo a crearla)
+      sessionStorage.setItem(`dnd_masterpw_${roomId}`, inputPassword);
+      connectSocket(role, password, playerName, playerColor);
+      return;
+    }
     setPassword(inputPassword);
     sessionStorage.setItem(`dnd_password_${roomId}`, inputPassword);
     connectSocket(role, inputPassword, playerName, playerColor);
@@ -326,7 +350,7 @@ export default function GameRoomPage() {
                 type="password"
                 value={inputPassword}
                 onChange={(e) => setInputPassword(e.target.value)}
-                placeholder="Inserisci password stanza"
+                placeholder={role === 'MASTER' ? 'Inserisci la password del Master' : 'Inserisci password stanza'}
                 className="text-center font-mono tracking-wider"
                 required
                 autoFocus
@@ -337,12 +361,62 @@ export default function GameRoomPage() {
               </Button>
             </form>
 
+            {role !== 'MASTER' && (
+              <p className="mt-4 text-[11px] text-slate-400">
+                Sei il Master? Torna alla homepage e usa &quot;Crea o Riapri come Master&quot; con la password del Master.
+              </p>
+            )}
+
             <Button
               variant="secondary"
               onClick={() => router.push('/')}
               className="w-full mt-4 text-xs gap-1.5 justify-center"
             >
               <ArrowLeft size={16} /> Torna alla Homepage
+            </Button>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
+
+  // Rientro senza chiave: il giocatore indica quale pedina è la sua (o ne crea una nuova)
+  if (tokenChoices && !room) {
+    return (
+      <main className="min-h-screen flex items-center justify-center p-4 bg-slate-950 text-slate-100">
+        <Card className="w-full max-w-md text-center border-amber-500/30 p-4 shadow-2xl">
+          <CardHeader className="items-center pb-2">
+            <CardTitle className="text-2xl text-white rpg-font">Qual è il tuo personaggio?</CardTitle>
+            <CardDescription className="text-xs sm:text-sm text-slate-400">
+              Nella stanza <span className="font-mono text-amber-300">{roomId}</span> ci sono personaggi senza giocatore
+              collegato. Tocca il tuo per riprenderlo.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-4 space-y-2">
+            {tokenChoices.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => joinRoomRef.current({ claimTokenId: t.id })}
+                className="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-900/80 border border-slate-700 hover:border-amber-500/60 text-left"
+              >
+                {t.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={t.avatarUrl} alt="" className="w-10 h-10 object-contain shrink-0" />
+                ) : (
+                  <span className="token-badge shrink-0" style={{ backgroundColor: t.color }}>
+                    {t.name[0]?.toUpperCase()}
+                  </span>
+                )}
+                <span className="font-semibold text-slate-100">{t.name}</span>
+              </button>
+            ))}
+            <Button
+              variant="secondary"
+              onClick={() => joinRoomRef.current({ newCharacter: true })}
+              className="w-full mt-2 text-xs"
+            >
+              Nessuno di questi: nuovo personaggio
             </Button>
           </CardContent>
         </Card>

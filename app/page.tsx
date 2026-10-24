@@ -41,6 +41,7 @@ export default function LandingPage() {
   const [createRoomId, setCreateRoomId] = useState<string>('');
   const [createPassword, setCreatePassword] = useState<string>('');
   const [masterName, setMasterName] = useState<string>('Dungeon Master');
+  const [masterPassword, setMasterPassword] = useState<string>('');
 
   // Form Unisciti Stanza (Player)
   const [joinRoomId, setJoinRoomId] = useState<string>('');
@@ -80,11 +81,16 @@ export default function LandingPage() {
       setErrorMsg('Imposta una password per proteggere la stanza.');
       return;
     }
+    if (!masterPassword.trim()) {
+      setErrorMsg('Imposta la password del Master: serve per rientrare nella stanza.');
+      return;
+    }
 
     const roomId = createRoomId.trim().toLowerCase();
 
     sessionStorage.setItem(`dnd_role_${roomId}`, 'MASTER');
     sessionStorage.setItem(`dnd_password_${roomId}`, createPassword);
+    sessionStorage.setItem(`dnd_masterpw_${roomId}`, masterPassword);
     sessionStorage.setItem(`dnd_name_${roomId}`, masterName);
 
     // Credenziali solo in sessionStorage: nell'URL finirebbero in cronologia e nei link copiati
@@ -217,6 +223,23 @@ export default function LandingPage() {
                   </div>
 
                   <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+                      <Crown size={16} className="text-amber-400" />
+                      <span>Password del Master</span>
+                    </label>
+                    <Input
+                      type="password"
+                      value={masterPassword}
+                      onChange={(e) => setMasterPassword(e.target.value)}
+                      placeholder="Solo tua, diversa da quella dei giocatori"
+                      required
+                    />
+                    <p className="mt-1.5 text-[11px] text-slate-400">
+                      Per rientrare in una stanza esistente, da qualsiasi dispositivo: stesso codice e stessa password del Master.
+                    </p>
+                  </div>
+
+                  <div>
                     <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
                       Nome Dungeon Master
                     </label>
@@ -230,7 +253,7 @@ export default function LandingPage() {
 
                   <Button type="submit" variant="rpgGold" className="w-full mt-4 py-3.5 text-sm gap-2">
                     <Crown size={20} />
-                    <span>Avvia Stanza come Master</span>
+                    <span>Crea o Riapri come Master</span>
                   </Button>
                 </form>
               </TabsContent>
