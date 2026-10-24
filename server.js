@@ -187,6 +187,7 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
         drawings: [],
         logs: [],
         initiative: null, // { entries: [{ tokenId, value }], activeTokenId, round } durante il combattimento
+        engagements: [], // coppie [idA, idB] di pedine in combattimento tra loro
       };
 
       rooms.set(cleanRoomId, newRoom);
@@ -472,6 +473,11 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
 
       room.tokens = room.tokens.filter((t) => t.id !== tokenId);
       io.to(roomId).emit('token-removed', { tokenId });
+
+      if (room.engagements?.some((pair) => pair.includes(tokenId))) {
+        room.engagements = room.engagements.filter((pair) => !pair.includes(tokenId));
+        io.to(roomId).emit('engagements-updated', room.engagements);
+      }
       callback?.({ success: true });
 
       // Una pedina rimossa esce dall'iniziativa; se era di turno, il turno passa a chi la seguiva
@@ -554,8 +560,30 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       if (!room || socket.role !== 'MASTER' || !room.initiative) return;
 
       room.initiative = null;
+      room.engagements = []; // finito il combattimento nessuno è più ingaggiato
       io.to(roomId).emit('initiative-updated', null);
+      io.to(roomId).emit('engagements-updated', room.engagements);
       createAndBroadcastLog(roomId, 'Master', 'MASTER', 'TURN', 'Il combattimento è terminato.');
+    });
+
+    // INGAGGIO: segna (o toglie) che due pedine sono in combattimento tra loro. È reciproco:
+    // la coppia è salvata una volta sola, con gli id in ordine. Il giocatore parte dalla propria pedina.
+    socket.on('toggle-engagement', ({ tokenId, targetId }) => {
+      const roomId = socket.roomId;
+      const room = rooms.get(roomId);
+      if (!room || tokenId === targetId) return;
+
+      const token = room.tokens.find((t) => t.id === tokenId);
+      if (!token || !room.tokens.some((t) => t.id === targetId)) return;
+      if (socket.role !== 'MASTER' && token.ownerId !== socket.id && socket.tokenId !== tokenId) return;
+
+      const pair = [tokenId, targetId].sort();
+      const engagements = room.engagements || [];
+      const exists = engagements.some(([a, b]) => a === pair[0] && b === pair[1]);
+      room.engagements = exists
+        ? engagements.filter(([a, b]) => !(a === pair[0] && b === pair[1]))
+        : [...engagements, pair];
+      io.to(roomId).emit('engagements-updated', room.engagements);
     });
 
     // TRATTI DI DISEGNO (Master only)

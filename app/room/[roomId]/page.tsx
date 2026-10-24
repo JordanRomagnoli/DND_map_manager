@@ -187,6 +187,10 @@ export default function GameRoomPage() {
       setRoom((prev) => (prev ? { ...prev, initiative } : null));
     });
 
+    newSocket.on('engagements-updated', (engagements: [string, string][]) => {
+      setRoom((prev) => (prev ? { ...prev, engagements } : null));
+    });
+
     newSocket.on('token-moved-animated', ({ tokenId, endX, endY }) => {
       setRoom((prev) => {
         if (!prev) return null;

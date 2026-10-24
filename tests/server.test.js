@@ -445,3 +445,39 @@ test('una stanza abbandonata esce dalla memoria ma resta su disco e si ricarica 
     srv.stop();
   }
 });
+
+test('ingaggio: reciproco, visibile a tutti, con permessi e pulizia', async () => {
+  const dm = client();
+  const a = client();
+  const b = client();
+  await ack(dm, 'create-room', { roomId: 'duel', password: 'pw' });
+  const { assignedTokenId: aId } = await ack(a, 'join-room', { roomId: 'duel', password: 'pw', playerName: 'A' });
+  const { assignedTokenId: bId } = await ack(b, 'join-room', { roomId: 'duel', password: 'pw', playerName: 'B' });
+  const orc = (await ack(dm, 'add-token', { tokenData: { name: 'Orco' } })).token.id;
+  const goblin = (await ack(dm, 'add-token', { tokenData: { name: 'Goblin' } })).token.id;
+  let seen = null;
+  b.on('engagements-updated', (list) => (seen = list));
+  const sameAs = (pairs) => assert.deepEqual(seen.map((p) => [...p].sort()).sort(), pairs.map((p) => [...p].sort()).sort());
+
+  a.emit('toggle-engagement', { tokenId: aId, targetId: orc });
+  a.emit('toggle-engagement', { tokenId: aId, targetId: goblin });
+  await wait(100);
+  sameAs([[aId, orc], [aId, goblin]]); // anche B (estraneo) vede gli ingaggi
+
+  dm.emit('toggle-engagement', { tokenId: orc, targetId: aId }); // stessa coppia vista dall'altro lato: la toglie
+  a.emit('toggle-engagement', { tokenId: bId, targetId: orc }); // A non può ingaggiare per conto di B
+  a.emit('toggle-engagement', { tokenId: aId, targetId: aId }); // né con sé stesso
+  await wait(100);
+  sameAs([[aId, goblin]]);
+
+  dm.emit('toggle-engagement', { tokenId: orc, targetId: bId });
+  await wait(100);
+  await ack(dm, 'remove-token', { tokenId: goblin });
+  await wait(100);
+  sameAs([[orc, bId]]); // la pedina rimossa esce dagli ingaggi
+
+  await ack(dm, 'set-initiative', { entries: [{ tokenId: orc, value: 10 }] });
+  dm.emit('end-initiative');
+  await wait(100);
+  assert.deepEqual(seen, [], 'a fine combattimento nessuno resta ingaggiato');
+});

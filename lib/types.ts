@@ -74,4 +74,5 @@ export interface RoomState {
   drawings: DrawingStroke[];
   logs?: ActionLogRecord[];
   initiative?: Initiative | null; // null = nessun combattimento in corso
+  engagements?: [string, string][]; // coppie di pedine in combattimento tra loro (reciproco)
 }

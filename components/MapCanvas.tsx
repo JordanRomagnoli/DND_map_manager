@@ -3,7 +3,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { RoomState, Token, DrawingStroke, UserRole } from '@/lib/types';
 import { Socket } from 'socket.io-client';
-import { Plus, Minus, Maximize2, Heart, Shield, Skull, Check, Camera, Upload, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { Plus, Minus, Maximize2, Heart, Shield, Skull, Check, Camera, Upload, Image as ImageIcon, Trash2, Swords } from 'lucide-react';
 import { sendTokenAvatar } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -346,6 +346,22 @@ export default function MapCanvas({
       ctx.textBaseline = 'middle';
       ctx.fillText(hudText, hudX, hudY);
     }
+
+    // 3.6 INGAGGI: linea rossa tratteggiata tra le pedine in combattimento tra loro
+    ctx.save();
+    ctx.strokeStyle = 'rgba(220, 38, 38, 0.85)';
+    ctx.lineWidth = 3 / zoom;
+    ctx.setLineDash([10 / zoom, 6 / zoom]);
+    room.engagements?.forEach(([idA, idB]) => {
+      const a = room.tokens.find((t) => t.id === idA);
+      const b = room.tokens.find((t) => t.id === idB);
+      if (!a || !b) return;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    });
+    ctx.restore();
 
     // 4. LAYER TOKEN (PLAYER & NPC)
     room.tokens.forEach((token) => {
@@ -961,6 +977,40 @@ export default function MapCanvas({
                   </div>
                 </div>
               )}
+
+              {/* Ingaggio: con chi è in combattimento questa pedina (Master o proprietario) */}
+              {(role === 'MASTER' || hpModalToken.id === myTokenId || hpModalToken.ownerId === socket?.id) &&
+                room.tokens.length > 1 && (
+                  <div className="p-3 bg-slate-950/60 rounded-xl border border-white/10 space-y-2">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-red-300">
+                      <Swords className="w-3.5 h-3.5 text-red-400" /> In combattimento con
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {room.tokens
+                        .filter((t) => t.id !== hpModalToken.id)
+                        .map((t) => {
+                          const engaged = room.engagements?.some(
+                            (pair) => pair.includes(hpModalToken.id) && pair.includes(t.id)
+                          );
+                          return (
+                            <button
+                              key={t.id}
+                              type="button"
+                              aria-pressed={engaged}
+                              onClick={() => socket?.emit('toggle-engagement', { tokenId: hpModalToken.id, targetId: t.id })}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors ${
+                                engaged
+                                  ? 'bg-red-500/25 border-red-500/70 text-red-200'
+                                  : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'
+                              }`}
+                            >
+                              {t.name}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
 
               {/* Progress bar HP attuale */}
               <div className="space-y-2">
