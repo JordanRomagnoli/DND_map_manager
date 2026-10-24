@@ -3,7 +3,10 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { createServer } = require('node:http');
 const { io: connect } = require('socket.io-client');
-const { attachSocketServer } = require('../server');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { attachSocketServer, createRoomStore } = require('../server');
 
 let httpServer;
 let ioServer;
@@ -340,5 +343,91 @@ test('le stanze abbandonate vengono cancellate, quelle ancora in uso no', async 
     back.disconnect();
   } finally {
     shortIo.close();
+  }
+});
+
+// Avvia un server separato (con il suo stato) per i test di persistenza e pulizia
+const startServer = async (options) => {
+  const http = createServer();
+  const io = attachSocketServer(http, options);
+  await new Promise((resolve) => http.listen(0, resolve));
+  const url = `http://localhost:${http.address().port}`;
+  const sockets = [];
+  const open = () => {
+    const socket = connect(url, { forceNew: true });
+    sockets.push(socket);
+    return socket;
+  };
+  const stop = () => {
+    sockets.forEach((socket) => socket.disconnect());
+    io.close();
+  };
+  return { open, stop };
+};
+const tempDir = () => fs.mkdtempSync(path.join(os.tmpdir(), 'dnd-rooms-'));
+
+test("dopo un riavvio la stanza torna com'era, con ruoli e pedine", async () => {
+  const dir = tempDir();
+  const map = 'data:image/jpeg;base64,' + 'A'.repeat(50_000);
+
+  // prima sessione
+  const first = await startServer({ store: createRoomStore(dir, { saveDelayMs: 20 }) });
+  const dm = first.open();
+  const pl = first.open();
+  const { masterKey } = await ack(dm, 'create-room', { roomId: 'campagna', password: 'pw' });
+  const { assignedTokenId: heroId, playerKey } = await ack(pl, 'join-room', { roomId: 'campagna', password: 'pw', playerName: 'Eroe' });
+  const { token: orc } = await ack(dm, 'add-token', { tokenData: { name: 'Orco', x: 125, y: 125, hp: 30, maxHp: 30 } });
+  dm.emit('update-token-hp', { tokenId: orc.id, hp: 11 });
+  dm.emit('update-background', { backgroundUrl: map });
+  dm.emit('draw-stroke', { stroke: { id: 's1', points: [{ x: 0, y: 0 }, { x: 9, y: 9 }], color: '#000', width: 3 } });
+  await ack(dm, 'set-initiative', { entries: [{ tokenId: heroId, value: 12 }, { tokenId: orc.id, value: 8 }] });
+  dm.emit('next-turn');
+  await wait(200);
+  first.stop();
+
+  // seconda sessione: nuovo server sulla stessa cartella
+  const second = await startServer({ store: createRoomStore(dir) });
+  try {
+    const wrong = await ack(second.open(), 'join-room', { roomId: 'campagna', password: 'sbagliata', playerName: 'X' });
+    assert.equal(wrong.success, false, 'la password è ancora richiesta');
+
+    const back = await ack(second.open(), 'create-room', { roomId: 'campagna', masterKey });
+    assert.ok(back.success, 'il Master rientra con la sua chiave');
+    const room = back.room;
+    assert.equal(room.tokens.find((t) => t.id === orc.id).hp, 11, "HP dell'Orco");
+    assert.equal(room.backgroundUrl, map, 'mappa di sfondo');
+    assert.equal(room.drawings.length, 1, 'disegni');
+    assert.deepEqual([room.initiative.activeTokenId, room.initiative.round], [orc.id, 1], 'combattimento e turno');
+
+    const hero = await ack(second.open(), 'join-room', { roomId: 'campagna', password: 'pw', playerKey, playerName: 'Eroe' });
+    assert.equal(hero.assignedTokenId, heroId, 'il giocatore ritrova la sua pedina');
+    assert.equal(hero.room.tokens.length, 2, 'nessuna pedina duplicata');
+  } finally {
+    second.stop();
+  }
+});
+
+test('su disco: stanze cancellate rimosse, codici strani al sicuro, file corrotti ignorati', async () => {
+  const dir = tempDir();
+  fs.writeFileSync(path.join(dir, 'room-rotto.json'), '{ non è json');
+
+  const srv = await startServer({ store: createRoomStore(dir, { saveDelayMs: 20 }), roomIdleTtlMs: 150 });
+  try {
+    const dm = srv.open();
+    const made = await ack(dm, 'create-room', { roomId: '../con', password: 'pw' });
+    assert.ok(made.success, "il file corrotto non blocca l'avvio");
+    dm.emit('update-background', { backgroundUrl: 'data:image/jpeg;base64,AAAA' });
+    await wait(100);
+
+    const files = fs.readdirSync(dir).filter((f) => f !== 'room-rotto.json');
+    assert.equal(files.length, 2, 'json + mappa');
+    assert.ok(files.every((f) => f.startsWith('room-') && !f.includes('..')), 'nomi file sicuri');
+    assert.equal(fs.readdirSync(path.dirname(dir)).includes('con'), false, 'niente fuori dalla cartella');
+
+    dm.disconnect();
+    await wait(400);
+    assert.deepEqual(fs.readdirSync(dir), ['room-rotto.json'], 'stanza abbandonata cancellata anche dal disco');
+  } finally {
+    srv.stop();
   }
 });

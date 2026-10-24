@@ -1,10 +1,9 @@
 const { createServer } = require('http');
 const { randomUUID } = require('crypto');
 const parseUrl = require('url').parse;
+const path = require('path');
 const { Server } = require('socket.io');
-
-// In-memory room store: le stanze si perdono al riavvio del server
-const rooms = new Map();
+const { createRoomStore } = require('./persistence');
 
 // Stato stanza inviabile ai client: senza password né chiave del Master
 const publicRoom = ({ password, masterKey, playerKeys, ...room }) => room;
@@ -53,7 +52,8 @@ const sortInitiativeEntries = (room, entries) => {
 const ROOM_IDLE_TTL_MS = 6 * 60 * 60 * 1000;
 
 // Collega socket.io e tutta la logica delle stanze a un server HTTP (usato da main e dai test)
-function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS } = {}) {
+// store (opzionale): salvataggio su disco delle stanze, vedi persistence.js
+function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, store = null } = {}) {
   const io = new Server(httpServer, {
     cors: {
       origin: '*',
@@ -61,7 +61,10 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS } = {
     maxHttpBufferSize: 1e7, // 10MB to accommodate image uploads via socket
   });
 
-  // Pulizia delle stanze abbandonate, altrimenti restano in memoria (con mappe e avatar) fino al riavvio
+  // Stato delle stanze in memoria (copia di lavoro); con lo store viene ricaricato dal disco all'avvio
+  const rooms = new Map((store?.loadAll() ?? []).map((room) => [room.id, room]));
+
+  // Pulizia delle stanze abbandonate, altrimenti restano per sempre (in memoria e su disco)
   // Allo scadere ricontrolla: se nel frattempo qualcuno è rientrato la stanza resta.
   const cleanupTimers = new Map(); // roomId -> timeout
   const scheduleRoomCleanupIfEmpty = (roomId) => {
@@ -69,14 +72,28 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS } = {
     clearTimeout(cleanupTimers.get(roomId)); // ogni nuova uscita fa ripartire l'attesa da capo
     const timer = setTimeout(() => {
       cleanupTimers.delete(roomId);
-      if (!io.sockets.adapter.rooms.get(roomId)?.size) rooms.delete(roomId);
+      if (io.sockets.adapter.rooms.get(roomId)?.size) return;
+      rooms.delete(roomId);
+      store?.remove(roomId);
     }, roomIdleTtlMs);
     timer.unref(); // non tiene acceso il processo
     cleanupTimers.set(roomId, timer);
   };
 
+  // Le stanze ricaricate dal disco sono vuote: partono subito con l'attesa per la pulizia
+  rooms.forEach((_, roomId) => scheduleRoomCleanupIfEmpty(roomId));
+
   io.on('connection', (socket) => {
     console.log(`🔌 Connesso socket: ${socket.id}`);
+
+    // Dopo ogni evento la stanza del socket viene salvata a breve. setImmediate: i gestori sono
+    // sincroni e girano dopo onAny, così socket.roomId è già aggiornato (anche per create/join-room)
+    socket.onAny(() =>
+      setImmediate(() => {
+        const room = rooms.get(socket.roomId);
+        if (room) store?.markDirty(room);
+      })
+    );
 
     // Helper per ancorare le coordinate al centro esatto di un quadrato della griglia
     const snapToCellCenter = (x, y, gridSize) => {
@@ -655,7 +672,16 @@ if (require.main === module) {
       handle(req, res, parsedUrl);
     });
 
-    attachSocketServer(httpServer);
+    // Le stanze vengono salvate in data/rooms e ricaricate all'avvio
+    const store = createRoomStore(path.join(__dirname, 'data', 'rooms'));
+    attachSocketServer(httpServer, { store });
+
+    // Alla chiusura (Ctrl+C o finestra del terminale chiusa) scrive i salvataggi ancora in attesa
+    const shutdown = () => {
+      store.flush();
+      process.exit(0);
+    };
+    ['SIGINT', 'SIGTERM', 'SIGHUP'].forEach((signal) => process.on(signal, shutdown));
 
     httpServer.listen(port, () => {
       console.log(`> Ready on http://${hostname}:${port}`);
@@ -664,4 +690,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { attachSocketServer };
+module.exports = { attachSocketServer, createRoomStore };

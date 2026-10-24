@@ -7,6 +7,9 @@ out/
 *.tsbuildinfo
 next-env.d.ts
 
+# stanze salvate dal server (dati della campagna)
+data/
+
 # variabili d'ambiente
 .env
 .env*.local
