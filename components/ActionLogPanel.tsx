@@ -21,6 +21,7 @@ import {
   X,
   Clock,
   Info,
+  Swords,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -92,6 +93,8 @@ export default function ActionLogPanel({ roomId, role, socket }: ActionLogPanelP
         return <Trash2 className="w-3.5 h-3.5 text-rose-400" />;
       case 'USER_JOIN':
         return <UserPlus className="w-3.5 h-3.5 text-emerald-400" />;
+      case 'TURN':
+        return <Swords className="w-3.5 h-3.5 text-amber-400" />;
       default:
         return <Clock className="w-3.5 h-3.5 text-slate-400" />;
     }
@@ -116,6 +119,7 @@ export default function ActionLogPanel({ roomId, role, socket }: ActionLogPanelP
     if (selectedFilter === 'MOVE') return log.actionType === 'TOKEN_MOVE';
     if (selectedFilter === 'MAP') return log.actionType === 'MAP_CHANGE' || log.actionType === 'GRID_UPDATE';
     if (selectedFilter === 'USERS') return log.actionType === 'USER_JOIN';
+    if (selectedFilter === 'TURN') return log.actionType === 'TURN';
     return true;
   });
 
@@ -209,6 +213,7 @@ export default function ActionLogPanel({ roomId, role, socket }: ActionLogPanelP
               { id: 'ALL', label: 'Tutti' },
               { id: 'HP', label: 'HP' },
               { id: 'MOVE', label: 'Movimenti' },
+              { id: 'TURN', label: 'Turni' },
               { id: 'MAP', label: 'Mappa' },
               { id: 'USERS', label: 'Utenti' },
             ].map((f) => (

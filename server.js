@@ -39,6 +39,16 @@ const isJoinBlocked = (key) => {
   return Boolean(entry && entry.resetAt > Date.now() && entry.count >= MAX_FAILED_JOINS);
 };
 
+// Iniziativa: entries già ordinate (valore più alto prima, a parità vale l'ordine inviato dal Master).
+// Le pedine sconosciute o ripetute vengono scartate.
+const sortInitiativeEntries = (room, entries) => {
+  const seen = new Set();
+  return (Array.isArray(entries) ? entries : [])
+    .map((e) => ({ tokenId: e?.tokenId, value: Number(e?.value) }))
+    .filter((e) => Number.isFinite(e.value) && room.tokens.some((t) => t.id === e.tokenId) && !seen.has(e.tokenId) && seen.add(e.tokenId))
+    .sort((a, b) => b.value - a.value);
+};
+
 // Collega socket.io e tutta la logica delle stanze a un server HTTP (usato da main e dai test)
 function attachSocketServer(httpServer) {
   const io = new Server(httpServer, {
@@ -136,6 +146,7 @@ function attachSocketServer(httpServer) {
         tokens: [],
         drawings: [],
         logs: [],
+        initiative: null, // { entries: [{ tokenId, value }], activeTokenId, round } durante il combattimento
       };
 
       rooms.set(cleanRoomId, newRoom);
@@ -248,12 +259,25 @@ function attachSocketServer(httpServer) {
         return;
       }
 
+      // Solo il movimento della pedina di turno fa parte della giocata: animato per tutti e registrato.
+      // In combattimento i giocatori si muovono solo nel proprio turno; il Master può sempre riposizionare.
+      const isTurnMove = room.initiative?.activeTokenId === tokenId;
+      if (room.initiative && !isTurnMove && socket.role !== 'MASTER') {
+        return;
+      }
+
       const finalSnapped = snapToCellCenter(endX ?? token.x, endY ?? token.y, room.gridSize);
       const actualStartX = startX ?? token.x;
       const actualStartY = startY ?? token.y;
 
       token.x = finalSnapped.x;
       token.y = finalSnapped.y;
+
+      // Fuori turno (piazzamento, riposizionamento): tutti vedono solo la posizione finale, nessun log
+      if (!isTurnMove) {
+        io.to(roomId).emit('token-moved', { tokenId, x: token.x, y: token.y });
+        return;
+      }
 
       // Broadcast dell'animazione fluida di scorrimento a TUTTI i client connessi
       io.to(roomId).emit('token-moved-animated', {
@@ -418,6 +442,20 @@ function attachSocketServer(httpServer) {
       io.to(roomId).emit('token-removed', { tokenId });
       callback?.({ success: true });
 
+      // Una pedina rimossa esce dall'iniziativa; se era di turno, il turno passa a chi la seguiva
+      if (room.initiative?.entries.some((e) => e.tokenId === tokenId)) {
+        const { entries, activeTokenId } = room.initiative;
+        const index = entries.findIndex((e) => e.tokenId === tokenId);
+        const remaining = entries.filter((e) => e.tokenId !== tokenId);
+        if (remaining.length === 0) {
+          room.initiative = null;
+        } else {
+          room.initiative.entries = remaining;
+          if (activeTokenId === tokenId) room.initiative.activeTokenId = remaining[index % remaining.length].tokenId;
+        }
+        io.to(roomId).emit('initiative-updated', room.initiative);
+      }
+
       createAndBroadcastLog(
         roomId,
         'Master',
@@ -425,6 +463,67 @@ function attachSocketServer(httpServer) {
         'TOKEN_REMOVE',
         `Il Master ha rimosso il token "${tokenName}".`
       );
+    });
+
+    // INIZIATIVA (Master only): avvia o aggiorna l'ordine dei turni
+    socket.on('set-initiative', ({ entries }, callback) => {
+      const roomId = socket.roomId;
+      const room = rooms.get(roomId);
+      if (!room || socket.role !== 'MASTER') {
+        return callback?.({ success: false, error: "Solo il Master può gestire l'iniziativa." });
+      }
+
+      const sorted = sortInitiativeEntries(room, entries);
+      if (sorted.length === 0) {
+        return callback?.({ success: false, error: "Inserisci l'iniziativa di almeno una pedina." });
+      }
+
+      const starting = !room.initiative;
+      if (starting) {
+        room.initiative = { entries: sorted, activeTokenId: sorted[0].tokenId, round: 1 };
+      } else {
+        room.initiative.entries = sorted;
+        // se la pedina di turno è stata tolta dall'ordine, il turno passa alla prima
+        if (!sorted.some((e) => e.tokenId === room.initiative.activeTokenId)) {
+          room.initiative.activeTokenId = sorted[0].tokenId;
+        }
+      }
+
+      io.to(roomId).emit('initiative-updated', room.initiative);
+      callback?.({ success: true });
+
+      if (starting) {
+        const first = room.tokens.find((t) => t.id === room.initiative.activeTokenId);
+        createAndBroadcastLog(roomId, 'Master', 'MASTER', 'TURN', `Inizia il combattimento. Round 1: turno di "${first.name}".`);
+      }
+    });
+
+    // TURNO SUCCESSIVO (Master only): passa alla pedina seguente, in fondo alla lista inizia un nuovo round
+    socket.on('next-turn', () => {
+      const roomId = socket.roomId;
+      const room = rooms.get(roomId);
+      if (!room || socket.role !== 'MASTER' || !room.initiative) return;
+
+      const { entries } = room.initiative;
+      const next = entries.findIndex((e) => e.tokenId === room.initiative.activeTokenId) + 1;
+      if (next >= entries.length) room.initiative.round++;
+      room.initiative.activeTokenId = entries[next % entries.length].tokenId;
+
+      io.to(roomId).emit('initiative-updated', room.initiative);
+
+      const active = room.tokens.find((t) => t.id === room.initiative.activeTokenId);
+      createAndBroadcastLog(roomId, 'Master', 'MASTER', 'TURN', `Round ${room.initiative.round}: turno di "${active.name}".`);
+    });
+
+    // FINE COMBATTIMENTO (Master only): da qui i movimenti tornano liberi e non registrati
+    socket.on('end-initiative', () => {
+      const roomId = socket.roomId;
+      const room = rooms.get(roomId);
+      if (!room || socket.role !== 'MASTER' || !room.initiative) return;
+
+      room.initiative = null;
+      io.to(roomId).emit('initiative-updated', null);
+      createAndBroadcastLog(roomId, 'Master', 'MASTER', 'TURN', 'Il combattimento è terminato.');
     });
 
     // TRATTI DI DISEGNO (Master only)

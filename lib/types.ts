@@ -40,7 +40,8 @@ export type ActionType =
   | 'GRID_UPDATE'
   | 'CLEAR_CANVAS'
   | 'AVATAR_UPDATE'
-  | 'USER_JOIN';
+  | 'USER_JOIN'
+  | 'TURN';
 
 export interface ActionLogRecord {
   id: string;
@@ -52,6 +53,13 @@ export interface ActionLogRecord {
   actionType: ActionType;
   description: string;
   details?: Record<string, any>;
+}
+
+// Combattimento a iniziativa: entries già ordinate dal server (valore più alto prima)
+export interface Initiative {
+  entries: { tokenId: string; value: number }[];
+  activeTokenId: string; // pedina di turno: solo i suoi movimenti sono animati e registrati
+  round: number;
 }
 
 export interface RoomState {
@@ -66,4 +74,5 @@ export interface RoomState {
   tokens: Token[];
   drawings: DrawingStroke[];
   logs?: ActionLogRecord[];
+  initiative?: Initiative | null; // null = nessun combattimento in corso
 }

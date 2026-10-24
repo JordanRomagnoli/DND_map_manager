@@ -377,6 +377,16 @@ export default function MapCanvas({
       ctx.save();
       ctx.translate(renderX, renderY);
 
+      // Pedina di turno in combattimento: riquadro dorato attorno al suo quadretto
+      if (room.initiative?.activeTokenId === token.id) {
+        const half = room.gridSize / 2;
+        ctx.save();
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 3 / zoom;
+        ctx.setLineDash([8 / zoom, 5 / zoom]);
+        ctx.strokeRect(-half, -half, room.gridSize, room.gridSize);
+        ctx.restore();
+      }
 
       // Ombra del Token
       ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
@@ -585,8 +595,10 @@ export default function MapCanvas({
       if (clickedToken) {
         // CONTROLLO PERMESSI:
         // Il Master può trascinare QUALSIASI token.
-        // Il Giocatore può trascinare ESCLUSIVAMENTE il PROPRIO token.
-        const canMove = role === 'MASTER' || clickedToken.id === myTokenId || clickedToken.ownerId === socket?.id;
+        // Il Giocatore può trascinare ESCLUSIVAMENTE il PROPRIO token, e in combattimento solo nel suo turno.
+        const isOwn = clickedToken.id === myTokenId || clickedToken.ownerId === socket?.id;
+        const isMyTurn = !room.initiative || room.initiative.activeTokenId === clickedToken.id;
+        const canMove = role === 'MASTER' || (isOwn && isMyTurn);
 
         if (canMove) {
           setDraggedTokenId(clickedToken.id);

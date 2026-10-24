@@ -166,3 +166,115 @@ test('gli HP arrivano solo al Master e al proprietario della pedina', async () =
   const back = await ack(client(), 'create-room', { roomId: 'hp', masterKey });
   assert.equal(back.room.tokens.find((t) => t.id === dragon.id).hp, 12, 'il Master rientrando vede gli HP');
 });
+
+// Registra gli eventi ricevuti da un socket, per controllare cosa arriva e cosa no
+const recorder = (socket) => {
+  const events = [];
+  socket.onAny((event, data) => events.push({ event, data }));
+  return {
+    events,
+    has: (event, match = () => true) => events.some((e) => e.event === event && match(e.data)),
+    clear: () => (events.length = 0),
+  };
+};
+const isMoveLog = (data) => data?.actionType === 'TOKEN_MOVE';
+
+test('fuori dal combattimento i movimenti mostrano solo il risultato e non vengono registrati', async () => {
+  const dm = client();
+  const pl = client();
+  await ack(dm, 'create-room', { roomId: 'free', password: 'pw' });
+  const { assignedTokenId: heroId } = await ack(pl, 'join-room', { roomId: 'free', password: 'pw', playerName: 'Eroe' });
+  const { token: npc } = await ack(dm, 'add-token', { tokenData: { name: 'Orco', x: 25, y: 25 } });
+  const seen = recorder(pl);
+
+  pl.emit('move-token-end', { tokenId: heroId, startX: 25, startY: 25, endX: 125, endY: 125 });
+  dm.emit('move-token-end', { tokenId: npc.id, startX: 25, startY: 25, endX: 275, endY: 25 });
+  await wait(200);
+
+  assert.ok(seen.has('token-moved', (d) => d.tokenId === heroId && d.x === 125), 'posizione finale del giocatore');
+  assert.ok(seen.has('token-moved', (d) => d.tokenId === npc.id && d.x === 275), 'posizione finale dell\'NPC');
+  assert.ok(!seen.has('token-moved-animated'), 'nessuna animazione');
+  assert.ok(!seen.has('action-logged', isMoveLog), 'nessun log di movimento');
+});
+
+test('in combattimento solo la pedina di turno si muove con animazione e log', async () => {
+  const dm = client();
+  const pl = client();
+  await ack(dm, 'create-room', { roomId: 'fight', password: 'pw' });
+  const { assignedTokenId: heroId } = await ack(pl, 'join-room', { roomId: 'fight', password: 'pw', playerName: 'Eroe' });
+  const { token: npc } = await ack(dm, 'add-token', { tokenData: { name: 'Orco', x: 25, y: 25 } });
+  const seen = recorder(pl);
+
+  const started = await ack(dm, 'set-initiative', { entries: [{ tokenId: heroId, value: 10 }, { tokenId: npc.id, value: 15 }] });
+  assert.ok(started.success);
+  await wait(100);
+  assert.ok(seen.has('initiative-updated', (d) => d.activeTokenId === npc.id && d.round === 1), 'inizia chi ha iniziativa più alta');
+  seen.clear();
+
+  // turno dell'Orco: il giocatore non può muoversi
+  pl.emit('move-token-end', { tokenId: heroId, endX: 525, endY: 525 });
+  await wait(100);
+  assert.ok(!seen.has('token-moved') && !seen.has('token-moved-animated'), 'giocatore fuori turno bloccato');
+
+  // il Master muove l'Orco di turno: animato e registrato
+  dm.emit('move-token-end', { tokenId: npc.id, startX: 25, startY: 25, endX: 125, endY: 25 });
+  // il Master riposiziona l'Eroe (non di turno): solo il risultato, nessun log
+  dm.emit('move-token-end', { tokenId: heroId, endX: 325, endY: 325 });
+  await wait(200);
+  assert.ok(seen.has('token-moved-animated', (d) => d.tokenId === npc.id), 'mossa di turno animata');
+  assert.ok(seen.has('action-logged', (d) => isMoveLog(d) && d.details.tokenId === npc.id), 'mossa di turno registrata');
+  assert.ok(seen.has('token-moved', (d) => d.tokenId === heroId && d.x === 325), 'riposizionamento silenzioso');
+  assert.ok(!seen.has('action-logged', (d) => isMoveLog(d) && d.details.tokenId === heroId), 'riposizionamento non registrato');
+  seen.clear();
+
+  // tocca all'Eroe
+  dm.emit('next-turn');
+  await wait(100);
+  pl.emit('move-token-end', { tokenId: heroId, startX: 325, startY: 325, endX: 375, endY: 325 });
+  await wait(200);
+  assert.ok(seen.has('token-moved-animated', (d) => d.tokenId === heroId), 'ora il giocatore si muove');
+  assert.ok(seen.has('action-logged', (d) => isMoveLog(d) && d.details.tokenId === heroId));
+});
+
+test('ordine dei turni, round, rimozione di pedine e fine combattimento', async () => {
+  const dm = client();
+  const pl = client();
+  await ack(dm, 'create-room', { roomId: 'order', password: 'pw' });
+  const { assignedTokenId: heroId } = await ack(pl, 'join-room', { roomId: 'order', password: 'pw', playerName: 'Eroe' });
+  const a = (await ack(dm, 'add-token', { tokenData: { name: 'A' } })).token.id;
+  const b = (await ack(dm, 'add-token', { tokenData: { name: 'B' } })).token.id;
+  let state = null;
+  pl.on('initiative-updated', (s) => (state = s));
+
+  const denied = await ack(pl, 'set-initiative', { entries: [{ tokenId: heroId, value: 99 }] });
+  assert.equal(denied.success, false, 'solo il Master gestisce l\'iniziativa');
+
+  await ack(dm, 'set-initiative', {
+    entries: [{ tokenId: a, value: 5 }, { tokenId: heroId, value: 20 }, { tokenId: b, value: 12 }, { tokenId: 'fantasma', value: 30 }],
+  });
+  await wait(100);
+  assert.deepEqual(state.entries.map((e) => e.tokenId), [heroId, b, a], 'ordinate per valore, pedine sconosciute scartate');
+
+  const turns = [];
+  for (let i = 0; i < 3; i++) {
+    dm.emit('next-turn');
+    await wait(60);
+    turns.push([state.activeTokenId, state.round]);
+  }
+  assert.deepEqual(turns, [[b, 1], [a, 1], [heroId, 2]], 'in fondo alla lista ricomincia con round +1');
+
+  dm.emit('next-turn'); // turno di B
+  await wait(60);
+  await ack(dm, 'remove-token', { tokenId: b });
+  await wait(60);
+  assert.equal(state.activeTokenId, a, 'rimossa la pedina di turno, tocca alla successiva');
+  assert.deepEqual(state.entries.map((e) => e.tokenId), [heroId, a]);
+
+  dm.emit('end-initiative');
+  await wait(60);
+  assert.equal(state, null, 'combattimento terminato');
+  const seen = recorder(pl);
+  pl.emit('move-token-end', { tokenId: heroId, endX: 75, endY: 75 });
+  await wait(100);
+  assert.ok(seen.has('token-moved') && !seen.has('token-moved-animated'), 'dopo il combattimento i movimenti tornano silenziosi');
+});

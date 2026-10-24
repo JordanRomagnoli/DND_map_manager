@@ -32,6 +32,7 @@ interface PlayerToolbarProps {
   gridSize: number;
   gridScale?: number;
   socket: Socket | null;
+  canMove: boolean; // false in combattimento quando non è il turno di questo giocatore
   onCenterOnToken?: () => void;
 }
 
@@ -42,13 +43,14 @@ export default function PlayerToolbar({
   gridSize,
   gridScale = 1,
   socket,
+  canMove,
   onCenterOnToken,
 }: PlayerToolbarProps) {
   const [activeTab, setActiveTab] = useState<'CARD' | 'DPAD'>('CARD');
 
   // Spostamento a step con il D-Pad tattico (1 quadrato alla volta con animazione di scorrimento)
   const handleMoveStep = (dx: number, dy: number) => {
-    if (!playerToken || !socket) return;
+    if (!playerToken || !socket || !canMove) return;
 
     const startX = playerToken.x;
     const startY = playerToken.y;
@@ -278,6 +280,7 @@ export default function PlayerToolbar({
               <p className="text-[10px] text-slate-400">
                 1 passo = {gridScale}m ({gridSize}px)
               </p>
+              {!canMove && <p className="text-[10px] font-semibold text-amber-400">Non è il tuo turno</p>}
             </div>
 
             {/* Tastiera D-Pad 4 Direzioni */}
@@ -285,8 +288,9 @@ export default function PlayerToolbar({
               <div className="grid grid-cols-3 gap-1 w-28 h-28 shrink-0">
                 <div />
                 <button
+                  disabled={!canMove}
                   onClick={() => handleMoveStep(0, -1)}
-                  className="bg-blue-600/80 hover:bg-blue-500 text-white rounded-lg flex items-center justify-center active:scale-95 transition-all border border-blue-400/40 shadow-sm"
+                  className="bg-blue-600/80 hover:bg-blue-500 text-white rounded-lg flex items-center justify-center active:scale-95 transition-all border border-blue-400/40 shadow-sm disabled:opacity-30 disabled:pointer-events-none"
                   title="Muovi in alto (1m)"
                 >
                   <ChevronUp size={22} />
@@ -294,8 +298,9 @@ export default function PlayerToolbar({
                 <div />
 
                 <button
+                  disabled={!canMove}
                   onClick={() => handleMoveStep(-1, 0)}
-                  className="bg-blue-600/80 hover:bg-blue-500 text-white rounded-lg flex items-center justify-center active:scale-95 transition-all border border-blue-400/40 shadow-sm"
+                  className="bg-blue-600/80 hover:bg-blue-500 text-white rounded-lg flex items-center justify-center active:scale-95 transition-all border border-blue-400/40 shadow-sm disabled:opacity-30 disabled:pointer-events-none"
                   title="Muovi a sinistra (1m)"
                 >
                   <ChevronLeft size={22} />
@@ -310,8 +315,9 @@ export default function PlayerToolbar({
                 </button>
 
                 <button
+                  disabled={!canMove}
                   onClick={() => handleMoveStep(1, 0)}
-                  className="bg-blue-600/80 hover:bg-blue-500 text-white rounded-lg flex items-center justify-center active:scale-95 transition-all border border-blue-400/40 shadow-sm"
+                  className="bg-blue-600/80 hover:bg-blue-500 text-white rounded-lg flex items-center justify-center active:scale-95 transition-all border border-blue-400/40 shadow-sm disabled:opacity-30 disabled:pointer-events-none"
                   title="Muovi a destra (1m)"
                 >
                   <ChevronRight size={22} />
@@ -319,8 +325,9 @@ export default function PlayerToolbar({
 
                 <div />
                 <button
+                  disabled={!canMove}
                   onClick={() => handleMoveStep(0, 1)}
-                  className="bg-blue-600/80 hover:bg-blue-500 text-white rounded-lg flex items-center justify-center active:scale-95 transition-all border border-blue-400/40 shadow-sm"
+                  className="bg-blue-600/80 hover:bg-blue-500 text-white rounded-lg flex items-center justify-center active:scale-95 transition-all border border-blue-400/40 shadow-sm disabled:opacity-30 disabled:pointer-events-none"
                   title="Muovi in basso (1m)"
                 >
                   <ChevronDown size={22} />

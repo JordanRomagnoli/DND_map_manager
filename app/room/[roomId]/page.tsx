@@ -3,12 +3,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
-import { RoomState, UserRole, Token, ActionLogRecord } from '@/lib/types';
+import { RoomState, UserRole, Token, ActionLogRecord, Initiative } from '@/lib/types';
 import MapCanvas from '@/components/MapCanvas';
 import MasterToolbar from '@/components/MasterToolbar';
 import PlayerToolbar from '@/components/PlayerToolbar';
 import TokenList from '@/components/TokenList';
 import ActionLogPanel from '@/components/ActionLogPanel';
+import InitiativePanel from '@/components/InitiativePanel';
 import { db } from '@/lib/db';
 import { Shield, KeyRound, ArrowLeft, AlertCircle, Crown, Copy, Check, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -165,6 +166,21 @@ export default function GameRoomPage() {
 
 
     // EVENT LISTENERS WEBSOCKET PER SINCRONIZZAZIONE IN TEMPO REALE
+
+    // Movimento fuori turno: solo la posizione finale, senza animazione
+    newSocket.on('token-moved', ({ tokenId, x, y }) => {
+      setRoom((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          tokens: prev.tokens.map((t) => (t.id === tokenId ? { ...t, x, y } : t)),
+        };
+      });
+    });
+
+    newSocket.on('initiative-updated', (initiative: Initiative | null) => {
+      setRoom((prev) => (prev ? { ...prev, initiative } : null));
+    });
 
     newSocket.on('token-moved-animated', ({ tokenId, endX, endY }) => {
       setRoom((prev) => {
@@ -390,6 +406,9 @@ export default function GameRoomPage() {
 
         {/* Pulsante Registro Azioni */}
         <ActionLogPanel roomId={room.id} role={role} socket={socket} />
+
+        {/* Combattimento a iniziativa: ordine dei turni */}
+        <InitiativePanel room={room} role={role} socket={socket} myTokenId={myTokenId} />
       </header>
 
 
@@ -428,6 +447,7 @@ export default function GameRoomPage() {
           gridSize={room.gridSize}
           gridScale={room.gridScale}
           socket={socket}
+          canMove={!room.initiative || room.initiative.activeTokenId === myTokenId}
           onCenterOnToken={() => setCenterTokenTrigger(Date.now())}
         />
       )}
