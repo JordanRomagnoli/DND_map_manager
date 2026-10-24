@@ -15,7 +15,7 @@ const handle = app.getRequestHandler();
 const rooms = new Map();
 
 // Stato stanza inviabile ai client: senza password né chiave del Master
-const publicRoom = ({ password, masterKey, ...room }) => room;
+const publicRoom = ({ password, masterKey, playerKeys, ...room }) => room;
 
 app.prepare().then(() => {
   const httpServer = createServer((req, res) => {
@@ -100,6 +100,7 @@ app.prepare().then(() => {
         name: roomName || `Stanza ${cleanRoomId}`,
         password: password || '',
         masterKey: randomUUID(),
+        playerKeys: new Map(), // chiave segreta del giocatore -> id della sua pedina
         gridSize: gridSize || 50,
         gridScale: gridScale || 1, // Scala di default: 1 metro per quadrato
         gridVisible: true,
@@ -124,7 +125,7 @@ app.prepare().then(() => {
     });
 
     // UNISCITI ALLA STANZA (solo Player: il ruolo Master passa da create-room con la chiave)
-    socket.on('join-room', ({ roomId, password, playerName, playerColor }, callback) => {
+    socket.on('join-room', ({ roomId, password, playerKey, playerName, playerColor }, callback) => {
       const role = 'PLAYER';
       const cleanRoomId = (roomId || '').trim().toLowerCase();
       const room = rooms.get(cleanRoomId);
@@ -145,10 +146,9 @@ app.prepare().then(() => {
 
       let playerToken = null;
 
-      // Se il giocatore non ha già un token nella stanza, ne creiamo uno
-      const existingToken = room.tokens.find(
-        (t) => t.type === 'player' && (t.ownerId === socket.id || t.name === playerName)
-      );
+      // La pedina si ritrova con la chiave del giocatore, non col nome (due giocatori possono chiamarsi uguale)
+      const key = typeof playerKey === 'string' && playerKey ? playerKey : randomUUID();
+      const existingToken = room.tokens.find((t) => t.id === room.playerKeys.get(key));
 
       if (existingToken) {
         existingToken.ownerId = socket.id;
@@ -177,6 +177,7 @@ app.prepare().then(() => {
         };
 
         room.tokens.push(playerToken);
+        room.playerKeys.set(key, playerToken.id);
         io.to(cleanRoomId).emit('token-added', playerToken);
       }
 
@@ -188,6 +189,7 @@ app.prepare().then(() => {
         success: true,
         room: publicRoom(room),
         assignedTokenId: playerToken.id,
+        playerKey: key,
       });
 
       // Notifica tutti gli altri player nella stanza

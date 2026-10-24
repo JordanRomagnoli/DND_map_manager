@@ -120,11 +120,13 @@ export default function GameRoomPage() {
           {
             roomId,
             password: currentPassword,
+            playerKey: localStorage.getItem(`dnd_playerkey_${roomId}`),
             playerName: name,
             playerColor: color,
           },
           (res: any) => {
             if (res?.success) {
+              localStorage.setItem(`dnd_playerkey_${roomId}`, res.playerKey);
               setRoom(res.room);
               setMyTokenId(res.assignedTokenId);
               if (res.room?.logs) {
