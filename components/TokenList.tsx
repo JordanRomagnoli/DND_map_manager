@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Users, Trash2, ChevronRight, ChevronLeft, Heart, Shield, Skull, Camera, Upload } from 'lucide-react';
 import { Token, UserRole } from '@/lib/types';
 import { Socket } from 'socket.io-client';
-import { resizeImageFile } from '@/lib/utils';
+import { sendTokenAvatar } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
@@ -25,20 +25,6 @@ export default function TokenList({ tokens, role, roomId, socket, myTokenId }: T
     if (!socket || role !== 'MASTER') return;
     if (confirm('Sei sicuro di voler rimuovere questo token dalla mappa?')) {
       socket.emit('remove-token', { roomId, tokenId });
-    }
-  };
-
-  const handleAvatarUpload = async (tokenId: string, file: File) => {
-    if (!socket || !file) return;
-    try {
-      const dataUrl = await resizeImageFile(file, 350);
-      socket.emit('update-token-avatar', {
-        roomId,
-        tokenId,
-        avatarUrl: dataUrl,
-      });
-    } catch (err) {
-      console.error('Error uploading avatar:', err);
     }
   };
 
@@ -180,7 +166,7 @@ export default function TokenList({ tokens, role, roomId, socket, myTokenId }: T
                               accept="image/*"
                               onChange={(e) => {
                                 const file = e.target.files?.[0];
-                                if (file) handleAvatarUpload(token.id, file);
+                                if (file && socket) sendTokenAvatar(socket, token.id, file);
                               }}
                               className="hidden"
                               id={`tokenlist-avatar-input-${token.id}`}

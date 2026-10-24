@@ -4,7 +4,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { RoomState, Token, DrawingStroke, UserRole } from '@/lib/types';
 import { Socket } from 'socket.io-client';
 import { Plus, Minus, Maximize2, Heart, Shield, Skull, Check, Camera, Upload, Image as ImageIcon, Trash2 } from 'lucide-react';
-import { resizeImageFile } from '@/lib/utils';
+import { sendTokenAvatar } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -800,26 +800,13 @@ export default function MapCanvas({
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !hpModalToken || !socket) return;
-    try {
-      const dataUrl = await resizeImageFile(file, 350);
-      socket.emit('update-token-avatar', {
-        roomId: room.id,
-        tokenId: hpModalToken.id,
-        avatarUrl: dataUrl,
-      });
-      setHpModalToken((prev) => (prev ? { ...prev, avatarUrl: dataUrl } : null));
-    } catch (err) {
-      console.error('Error uploading avatar:', err);
-    }
+    const avatarUrl = await sendTokenAvatar(socket, hpModalToken.id, file);
+    if (avatarUrl) setHpModalToken((prev) => (prev ? { ...prev, avatarUrl } : null));
   };
 
   const handleRemoveAvatar = () => {
     if (!hpModalToken || !socket) return;
-    socket.emit('update-token-avatar', {
-      roomId: room.id,
-      tokenId: hpModalToken.id,
-      avatarUrl: null,
-    });
+    sendTokenAvatar(socket, hpModalToken.id, null);
     setHpModalToken((prev) => (prev ? { ...prev, avatarUrl: undefined } : null));
   };
 

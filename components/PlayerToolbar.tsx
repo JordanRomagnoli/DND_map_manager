@@ -18,7 +18,7 @@ import {
   Upload,
   Trash2,
 } from 'lucide-react';
-import { resizeImageFile } from '@/lib/utils';
+import { sendTokenAvatar } from '@/lib/utils';
 import { Token } from '@/lib/types';
 import { Socket } from 'socket.io-client';
 import { Button } from '@/components/ui/button';
@@ -83,28 +83,13 @@ export default function PlayerToolbar({
   };
 
   // Caricamento Immagine Avatar del Player
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !playerToken || !socket) return;
-    try {
-      const dataUrl = await resizeImageFile(file, 350);
-      socket.emit('update-token-avatar', {
-        roomId,
-        tokenId: playerToken.id,
-        avatarUrl: dataUrl,
-      });
-    } catch (err) {
-      console.error('Error uploading player avatar:', err);
-    }
+    if (file && playerToken && socket) sendTokenAvatar(socket, playerToken.id, file);
   };
 
   const handleRemoveAvatar = () => {
-    if (!playerToken || !socket) return;
-    socket.emit('update-token-avatar', {
-      roomId,
-      tokenId: playerToken.id,
-      avatarUrl: null,
-    });
+    if (playerToken && socket) sendTokenAvatar(socket, playerToken.id, null);
   };
 
   const hpPercent =

@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import type { Socket } from 'socket.io-client';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -43,4 +44,21 @@ export function resizeImageFile(file: File, maxSize = 350): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+// Imposta l'avatar di una pedina: con un file lo ridimensiona e lo invia, con null lo rimuove.
+// Restituisce il nuovo avatarUrl, oppure undefined se l'immagine non si può leggere.
+export async function sendTokenAvatar(
+  socket: Socket,
+  tokenId: string,
+  file: File | null
+): Promise<string | null | undefined> {
+  try {
+    const avatarUrl = file ? await resizeImageFile(file, 350) : null;
+    socket.emit('update-token-avatar', { tokenId, avatarUrl });
+    return avatarUrl;
+  } catch (err) {
+    console.error("Errore nel caricamento dell'avatar:", err);
+    return undefined;
+  }
 }
