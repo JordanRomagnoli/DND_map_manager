@@ -117,22 +117,26 @@ export default function MasterToolbar({
   };
 
   // Caricamento File Mappa Locale JPG/PNG
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !socket) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      if (dataUrl) {
-        socket.emit('update-background', {
-          roomId: room.id,
-          backgroundUrl: dataUrl,
-        });
-        setShowMapModal(false);
+    try {
+      // Ridimensiona: il server accetta al massimo 10MB per messaggio, oltre chiude la connessione
+      const dataUrl = await resizeImageFile(file, 4096);
+      if (dataUrl.length > 9_500_000) {
+        alert('La mappa è troppo pesante anche dopo il ridimensionamento. Prova con un\'immagine più piccola.');
+        return;
       }
-    };
-    reader.readAsDataURL(file);
+      socket.emit('update-background', {
+        roomId: room.id,
+        backgroundUrl: dataUrl,
+      });
+      setShowMapModal(false);
+    } catch (err) {
+      console.error('Error uploading map:', err);
+      alert('Impossibile leggere questa immagine.');
+    }
   };
 
   // Caricamento via URL
