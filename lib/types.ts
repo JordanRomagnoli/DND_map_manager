@@ -65,7 +65,6 @@ export interface RoomState {
   backgroundUrl: string | null; // null = default white grid sheet
   tokens: Token[];
   drawings: DrawingStroke[];
-  masterSocketId: string | null;
   logs?: ActionLogRecord[];
 }
 

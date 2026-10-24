@@ -115,7 +115,6 @@ function attachSocketServer(httpServer) {
         if (!masterKey || existing.masterKey !== masterKey) {
           return callback?.({ success: false, error: 'Stanza già esistente: solo il Master che l\'ha creata può gestirla.' });
         }
-        existing.masterSocketId = socket.id;
         leaveCurrentRoom();
         socket.join([cleanRoomId, masterRoom(cleanRoomId)]);
         socket.role = 'MASTER';
@@ -137,7 +136,6 @@ function attachSocketServer(httpServer) {
         tokens: [],
         drawings: [],
         logs: [],
-        masterSocketId: socket.id,
       };
 
       rooms.set(cleanRoomId, newRoom);
@@ -228,13 +226,6 @@ function attachSocketServer(httpServer) {
         playerKey: key,
       });
 
-      // Notifica tutti gli altri player nella stanza
-      socket.to(cleanRoomId).emit('user-joined', {
-        role,
-        playerName: socket.playerName,
-        socketId: socket.id,
-      });
-
       createAndBroadcastLog(
         cleanRoomId,
         socket.playerName,
@@ -244,33 +235,9 @@ function attachSocketServer(httpServer) {
       );
     });
 
-    // SPOSTAMENTO TOKEN IN TEMPO REALE (Ancorato al centro del quadrato)
-    socket.on('move-token', ({ tokenId, x, y }) => {
-      const roomId = socket.roomId; // never trust the client's roomId: it could target another room
-      const room = rooms.get(roomId);
-      if (!room) return;
-
-      const token = room.tokens.find((t) => t.id === tokenId);
-      if (!token) return;
-
-      // CONTROLLO PERMESSI:
-      if (socket.role !== 'MASTER' && token.ownerId !== socket.id && socket.tokenId !== tokenId) {
-        console.warn(`⛔ Movimento rifiutato: Socket ${socket.id} non autorizzato a muovere ${token.name}`);
-        return;
-      }
-
-      // Ancoraggio al centro esatto del quadrato
-      const snapped = snapToCellCenter(x, y, room.gridSize);
-      token.x = snapped.x;
-      token.y = snapped.y;
-
-      // Broadcast aggiornamento posizione
-      io.to(roomId).emit('token-moved', { tokenId, x: token.x, y: token.y });
-    });
-
     // FINE SPOSTAMENTO TOKEN (Trasmette l'animazione di scorrimento "trascinandosi" a tutti i partecipanti)
     socket.on('move-token-end', ({ tokenId, startX, startY, endX, endY }) => {
-      const roomId = socket.roomId;
+      const roomId = socket.roomId; // mai il roomId del client: potrebbe puntare a un'altra stanza
       const room = rooms.get(roomId);
       if (!room) return;
 
@@ -553,13 +520,6 @@ function attachSocketServer(httpServer) {
     // DISCONNESSIONE
     socket.on('disconnect', () => {
       console.log(`❌ Disconnesso socket: ${socket.id}`);
-      if (socket.roomId && socket.role === 'MASTER') {
-        const room = rooms.get(socket.roomId);
-        if (room && room.masterSocketId === socket.id) {
-          room.masterSocketId = null;
-          io.to(socket.roomId).emit('master-status', { online: false });
-        }
-      }
     });
   });
 

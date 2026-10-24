@@ -165,16 +165,6 @@ export default function GameRoomPage() {
 
     // EVENT LISTENERS WEBSOCKET PER SINCRONIZZAZIONE IN TEMPO REALE
 
-    newSocket.on('token-moved', ({ tokenId, x, y }) => {
-      setRoom((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          tokens: prev.tokens.map((t) => (t.id === tokenId ? { ...t, x, y } : t)),
-        };
-      });
-    });
-
     newSocket.on('token-moved-animated', ({ tokenId, endX, endY }) => {
       setRoom((prev) => {
         if (!prev) return null;
