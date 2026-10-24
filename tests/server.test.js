@@ -70,6 +70,24 @@ test('cambiando stanza il socket smette di ricevere gli eventi della precedente'
   assert.deepEqual(seen, [], 'nessun evento dalla stanza A');
 });
 
+test('dopo 10 password errate la stanza rifiuta altri tentativi', async () => {
+  await ack(client(), 'create-room', { roomId: 'brute', password: 'giusta' });
+  await ack(client(), 'create-room', { roomId: 'other', password: 'giusta' });
+
+  // socket sempre nuovi, come farebbe un attacco: il limite è per IP, non per connessione
+  for (let i = 0; i < 10; i++) {
+    const res = await ack(client(), 'join-room', { roomId: 'brute', password: `prova${i}`, playerName: 'X' });
+    assert.equal(res.error, 'Password errata.');
+  }
+
+  const blocked = await ack(client(), 'join-room', { roomId: 'brute', password: 'giusta', playerName: 'X' });
+  assert.equal(blocked.success, false, 'bloccato anche con la password giusta');
+  assert.match(blocked.error, /Troppi tentativi/);
+
+  const elsewhere = await ack(client(), 'join-room', { roomId: 'other', password: 'giusta', playerName: 'X' });
+  assert.ok(elsewhere.success, 'il blocco riguarda solo quella stanza');
+});
+
 test('la password da sola non dà il ruolo di Master', async () => {
   const dm = client();
   const player = client();

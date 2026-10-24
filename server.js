@@ -18,6 +18,27 @@ const playerView = (room, ownTokenId) => ({
   logs: (room.logs || []).filter((l) => !l.private),
 });
 
+// Limite ai tentativi di password errati, per IP e stanza: blocca chi prova password a raffica
+const MAX_FAILED_JOINS = 10;
+const FAILED_JOIN_WINDOW_MS = 15 * 60 * 1000;
+const failedJoins = new Map(); // `${ip}|${roomId}` -> { count, resetAt }
+
+const recordFailedJoin = (key) => {
+  const now = Date.now();
+  if (failedJoins.size > 1000) {
+    // pulizia dei blocchi scaduti, perché la mappa non cresca all'infinito
+    for (const [k, v] of failedJoins) if (v.resetAt <= now) failedJoins.delete(k);
+  }
+  const current = failedJoins.get(key);
+  if (current && current.resetAt > now) current.count++;
+  else failedJoins.set(key, { count: 1, resetAt: now + FAILED_JOIN_WINDOW_MS });
+};
+
+const isJoinBlocked = (key) => {
+  const entry = failedJoins.get(key);
+  return Boolean(entry && entry.resetAt > Date.now() && entry.count >= MAX_FAILED_JOINS);
+};
+
 // Collega socket.io e tutta la logica delle stanze a un server HTTP (usato da main e dai test)
 function attachSocketServer(httpServer) {
   const io = new Server(httpServer, {
@@ -143,8 +164,13 @@ function attachSocketServer(httpServer) {
         return callback?.({ success: false, error: `La stanza "${cleanRoomId}" non esiste.` });
       }
 
-      // Validazione Password
+      // Validazione Password (con limite ai tentativi errati)
+      const attemptKey = `${socket.handshake.address}|${cleanRoomId}`;
+      if (isJoinBlocked(attemptKey)) {
+        return callback?.({ success: false, error: 'Troppi tentativi errati. Riprova tra qualche minuto.' });
+      }
       if (room.password && room.password !== password) {
+        recordFailedJoin(attemptKey);
         return callback?.({ success: false, error: 'Password errata.' });
       }
 
