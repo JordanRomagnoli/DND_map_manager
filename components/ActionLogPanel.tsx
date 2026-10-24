@@ -92,6 +92,8 @@ export default function ActionLogPanel({ roomId, role, socket }: ActionLogPanelP
         return <UserPlus className="w-3.5 h-3.5 text-emerald-400" />;
       case 'TURN':
         return <Swords className="w-3.5 h-3.5 text-amber-400" />;
+      case 'ENGAGEMENT':
+        return <Swords className="w-3.5 h-3.5 text-red-400" />;
       default:
         return <Clock className="w-3.5 h-3.5 text-slate-400" />;
     }

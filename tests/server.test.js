@@ -481,3 +481,21 @@ test('ingaggio: reciproco, visibile a tutti, con permessi e pulizia', async () =
   await wait(100);
   assert.deepEqual(seen, [], 'a fine combattimento nessuno resta ingaggiato');
 });
+
+test('gli ingaggi compaiono nel registro azioni', async () => {
+  const dm = client();
+  const pl = client();
+  await ack(dm, 'create-room', { roomId: 'duel-log', password: 'pw' });
+  const { assignedTokenId: heroId } = await ack(pl, 'join-room', { roomId: 'duel-log', password: 'pw', playerName: 'Aragorn' });
+  const orc = (await ack(dm, 'add-token', { tokenData: { name: 'Orco' } })).token.id;
+  const logs = [];
+  dm.on('action-logged', (log) => log.actionType === 'ENGAGEMENT' && logs.push(log.description));
+
+  pl.emit('toggle-engagement', { tokenId: heroId, targetId: orc });
+  pl.emit('toggle-engagement', { tokenId: orc, targetId: heroId }); // non è sua: rifiutato, nessuna voce
+  await wait(100);
+  pl.emit('toggle-engagement', { tokenId: heroId, targetId: orc });
+  await wait(100);
+
+  assert.deepEqual(logs, ['"Aragorn" ingaggia "Orco".', '"Aragorn" e "Orco" non sono più in combattimento.']);
+});

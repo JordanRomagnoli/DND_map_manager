@@ -40,7 +40,8 @@ export type ActionType =
   | 'CLEAR_CANVAS'
   | 'AVATAR_UPDATE'
   | 'USER_JOIN'
-  | 'TURN';
+  | 'TURN'
+  | 'ENGAGEMENT';
 
 export interface ActionLogRecord {
   id: string;

@@ -574,7 +574,8 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       if (!room || tokenId === targetId) return;
 
       const token = room.tokens.find((t) => t.id === tokenId);
-      if (!token || !room.tokens.some((t) => t.id === targetId)) return;
+      const target = room.tokens.find((t) => t.id === targetId);
+      if (!token || !target) return;
       if (socket.role !== 'MASTER' && token.ownerId !== socket.id && socket.tokenId !== tokenId) return;
 
       const pair = [tokenId, targetId].sort();
@@ -584,6 +585,16 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
         ? engagements.filter(([a, b]) => !(a === pair[0] && b === pair[1]))
         : [...engagements, pair];
       io.to(roomId).emit('engagements-updated', room.engagements);
+
+      createAndBroadcastLog(
+        roomId,
+        socket.playerName || (socket.role === 'MASTER' ? 'Master' : token.name),
+        socket.role,
+        'ENGAGEMENT',
+        exists
+          ? `"${token.name}" e "${target.name}" non sono più in combattimento.`
+          : `"${token.name}" ingaggia "${target.name}".`
+      );
     });
 
     // TRATTI DI DISEGNO (Master only)
