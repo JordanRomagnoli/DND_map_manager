@@ -121,8 +121,8 @@ export default function MasterToolbar({
     if (!file || !socket) return;
 
     try {
-      // Ridimensiona: il server accetta al massimo 10MB per messaggio, oltre chiude la connessione
-      const dataUrl = await resizeImageFile(file, 4096);
+      // Ridimensiona in JPEG: il server accetta al massimo 10MB per messaggio, oltre chiude la connessione
+      const dataUrl = await resizeImageFile(file, 4096, false);
       if (dataUrl.length > 9_500_000) {
         alert('La mappa è troppo pesante anche dopo il ridimensionamento. Prova con un\'immagine più piccola.');
         return;

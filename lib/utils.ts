@@ -6,7 +6,10 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function resizeImageFile(file: File, maxSize = 350): Promise<string> {
+// Ridimensiona un'immagine a maxSize px sul lato lungo e la restituisce come data URL.
+// keepTransparency: i file non JPEG (es. avatar PNG) restano PNG per non perdere lo sfondo trasparente;
+// con false esce sempre JPEG, molto più leggero (usato per le mappe).
+export function resizeImageFile(file: File, maxSize = 350, keepTransparency = true): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -33,7 +36,8 @@ export function resizeImageFile(file: File, maxSize = 350): Promise<string> {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.85));
+          const asPng = keepTransparency && file.type !== 'image/jpeg';
+          resolve(asPng ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.85));
         } else {
           resolve(e.target?.result as string);
         }
