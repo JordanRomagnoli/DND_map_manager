@@ -7,7 +7,7 @@ out/
 *.tsbuildinfo
 next-env.d.ts
 
-# variabili d'ambiente (.env.example resta nel repo)
+# variabili d'ambiente
 .env
 .env*.local
 

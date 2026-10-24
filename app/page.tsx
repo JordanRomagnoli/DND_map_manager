@@ -57,8 +57,8 @@ export default function LandingPage() {
     setCreateRoomId(randomCode);
   };
 
-  // Submit Crea Stanza (Master - REST HTTP)
-  const handleCreateRoom = async (e: React.FormEvent) => {
+  // Submit Crea Stanza (Master): la stanza viene creata dal server socket all'ingresso
+  const handleCreateRoom = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -73,35 +73,15 @@ export default function LandingPage() {
 
     const roomId = createRoomId.trim().toLowerCase();
 
-    try {
-      const res = await fetch('/api/rooms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          roomId,
-          password: createPassword,
-          roomName: `Stanza ${roomId}`,
-        }),
-      });
+    sessionStorage.setItem(`dnd_role_${roomId}`, 'MASTER');
+    sessionStorage.setItem(`dnd_password_${roomId}`, createPassword);
+    sessionStorage.setItem(`dnd_name_${roomId}`, masterName);
 
-      const data = await res.json();
-      if (!data.success) {
-        setErrorMsg(data.error || 'Errore durante la creazione della stanza.');
-        return;
-      }
-
-      sessionStorage.setItem(`dnd_role_${roomId}`, 'MASTER');
-      sessionStorage.setItem(`dnd_password_${roomId}`, createPassword);
-      sessionStorage.setItem(`dnd_name_${roomId}`, masterName);
-
-      router.push(`/room/${roomId}?role=MASTER&password=${encodeURIComponent(createPassword)}`);
-    } catch (err) {
-      setErrorMsg('Impossibile contattare il server.');
-    }
+    router.push(`/room/${roomId}?role=MASTER&password=${encodeURIComponent(createPassword)}`);
   };
 
-  // Submit Unisciti Stanza (Player - REST HTTP)
-  const handleJoinRoom = async (e: React.FormEvent) => {
+  // Submit Unisciti Stanza (Player): la password viene verificata dal server socket all'ingresso
+  const handleJoinRoom = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -120,35 +100,16 @@ export default function LandingPage() {
 
     const roomId = joinRoomId.trim().toLowerCase();
 
-    try {
-      const res = await fetch('/api/rooms/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          roomId,
-          password: joinPassword,
-        }),
-      });
+    sessionStorage.setItem(`dnd_role_${roomId}`, 'PLAYER');
+    sessionStorage.setItem(`dnd_password_${roomId}`, joinPassword);
+    sessionStorage.setItem(`dnd_name_${roomId}`, playerName);
+    sessionStorage.setItem(`dnd_color_${roomId}`, playerColor);
 
-      const data = await res.json();
-      if (!data.success) {
-        setErrorMsg(data.error || 'Password errata o stanza non trovata.');
-        return;
-      }
-
-      sessionStorage.setItem(`dnd_role_${roomId}`, 'PLAYER');
-      sessionStorage.setItem(`dnd_password_${roomId}`, joinPassword);
-      sessionStorage.setItem(`dnd_name_${roomId}`, playerName);
-      sessionStorage.setItem(`dnd_color_${roomId}`, playerColor);
-
-      router.push(
-        `/room/${roomId}?role=PLAYER&password=${encodeURIComponent(joinPassword)}&name=${encodeURIComponent(
-          playerName
-        )}&color=${encodeURIComponent(playerColor)}`
-      );
-    } catch (err) {
-      setErrorMsg('Impossibile contattare il server.');
-    }
+    router.push(
+      `/room/${roomId}?role=PLAYER&password=${encodeURIComponent(joinPassword)}&name=${encodeURIComponent(
+        playerName
+      )}&color=${encodeURIComponent(playerColor)}`
+    );
   };
 
   return (

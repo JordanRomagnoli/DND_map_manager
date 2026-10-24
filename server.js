@@ -3,7 +3,7 @@ const { randomUUID } = require('crypto');
 const parseUrl = require('url').parse;
 const { Server } = require('socket.io');
 
-// In-memory room store (in-sync with Supabase when configured)
+// In-memory room store: le stanze si perdono al riavvio del server
 const rooms = new Map();
 
 // Stato stanza inviabile ai client: senza password né chiave del Master
