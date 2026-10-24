@@ -17,6 +17,15 @@ const rooms = new Map();
 // Stato stanza inviabile ai client: senza password né chiave del Master
 const publicRoom = ({ password, masterKey, playerKeys, ...room }) => room;
 
+// Gli HP li vedono solo il Master e il proprietario della pedina: il server non li invia agli altri
+const masterRoom = (roomId) => `${roomId}:master`;
+const hideHp = (token) => ({ ...token, hp: undefined, maxHp: undefined });
+const playerView = (room, ownTokenId) => ({
+  ...publicRoom(room),
+  tokens: room.tokens.map((t) => (t.id === ownTokenId ? t : hideHp(t))),
+  logs: (room.logs || []).filter((l) => !l.private),
+});
+
 app.prepare().then(() => {
   const httpServer = createServer((req, res) => {
     const parsedUrl = parseUrl(req.url, true);
@@ -46,7 +55,8 @@ app.prepare().then(() => {
     // Helper per creare e trasmettere log delle azioni
     const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
 
-    const createAndBroadcastLog = (roomId, actorName, actorRole, actionType, description, details = {}) => {
+    // audience: socket.io rooms/socket ids che possono vedere il log (default: tutta la stanza)
+    const createAndBroadcastLog = (roomId, actorName, actorRole, actionType, description, details = {}, audience = null) => {
       const room = rooms.get(roomId);
       if (!room) return;
 
@@ -63,6 +73,7 @@ app.prepare().then(() => {
         actionType,
         description,
         details,
+        ...(audience && { private: true }),
       };
 
       room.logs.push(logRecord);
@@ -70,7 +81,7 @@ app.prepare().then(() => {
         room.logs.shift();
       }
 
-      io.to(roomId).emit('action-logged', logRecord);
+      io.to(audience || roomId).emit('action-logged', logRecord);
     };
 
     // CREA STANZA (Master)
@@ -88,7 +99,7 @@ app.prepare().then(() => {
           return callback?.({ success: false, error: 'Stanza già esistente: solo il Master che l\'ha creata può gestirla.' });
         }
         existing.masterSocketId = socket.id;
-        socket.join(cleanRoomId);
+        socket.join([cleanRoomId, masterRoom(cleanRoomId)]);
         socket.role = 'MASTER';
         socket.roomId = cleanRoomId;
         socket.playerName = 'Master';
@@ -113,7 +124,7 @@ app.prepare().then(() => {
       };
 
       rooms.set(cleanRoomId, newRoom);
-      socket.join(cleanRoomId);
+      socket.join([cleanRoomId, masterRoom(cleanRoomId)]);
       socket.role = 'MASTER';
       socket.roomId = cleanRoomId;
       socket.playerName = 'Master';
@@ -139,6 +150,7 @@ app.prepare().then(() => {
         return callback?.({ success: false, error: 'Password errata.' });
       }
 
+      socket.leave(masterRoom(cleanRoomId)); // un ex Master che rientra come giocatore non vede più gli HP
       socket.join(cleanRoomId);
       socket.role = role;
       socket.roomId = cleanRoomId;
@@ -178,7 +190,8 @@ app.prepare().then(() => {
 
         room.tokens.push(playerToken);
         room.playerKeys.set(key, playerToken.id);
-        io.to(cleanRoomId).emit('token-added', playerToken);
+        io.to([masterRoom(cleanRoomId), socket.id]).emit('token-added', playerToken);
+        io.to(cleanRoomId).except([masterRoom(cleanRoomId), socket.id]).emit('token-added', hideHp(playerToken));
       }
 
       socket.tokenId = playerToken.id;
@@ -187,7 +200,7 @@ app.prepare().then(() => {
 
       callback?.({
         success: true,
-        room: publicRoom(room),
+        room: playerView(room, playerToken.id),
         assignedTokenId: playerToken.id,
         playerKey: key,
       });
@@ -308,8 +321,9 @@ app.prepare().then(() => {
       if (hp !== undefined) token.hp = Math.max(0, parseInt(hp, 10) || 0);
       if (maxHp !== undefined) token.maxHp = Math.max(1, parseInt(maxHp, 10) || 1);
 
-      // Broadcast aggiornamento HP a tutti i client nella stanza
-      io.to(roomId).emit('token-hp-updated', {
+      // Solo il Master e il proprietario della pedina ricevono gli HP
+      const hpAudience = [masterRoom(roomId), token.ownerId].filter(Boolean);
+      io.to(hpAudience).emit('token-hp-updated', {
         tokenId,
         hp: token.hp,
         maxHp: token.maxHp,
@@ -320,7 +334,9 @@ app.prepare().then(() => {
         socket.playerName || (socket.role === 'MASTER' ? 'Master' : token.name),
         socket.role,
         'HP_UPDATE',
-        `${socket.playerName || token.name} ha aggiornato gli HP di "${token.name}" a ${token.hp}/${token.maxHp} (da ${prevHp}).`
+        `${socket.playerName || token.name} ha aggiornato gli HP di "${token.name}" a ${token.hp}/${token.maxHp} (da ${prevHp}).`,
+        {},
+        hpAudience
       );
     });
 
@@ -384,7 +400,8 @@ app.prepare().then(() => {
       };
 
       room.tokens.push(newToken);
-      io.to(roomId).emit('token-added', newToken);
+      io.to(masterRoom(roomId)).emit('token-added', newToken);
+      io.to(roomId).except(masterRoom(roomId)).emit('token-added', hideHp(newToken));
       callback?.({ success: true, token: newToken });
 
       createAndBroadcastLog(
