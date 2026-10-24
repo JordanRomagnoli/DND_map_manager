@@ -49,6 +49,27 @@ test('un Master non può modificare la stanza di un altro', async () => {
   assert.equal(res.room.drawings.length, 1);
 });
 
+test('cambiando stanza il socket smette di ricevere gli eventi della precedente', async () => {
+  const dmA = client();
+  const roamer = client();
+  await ack(dmA, 'create-room', { roomId: 'old-a', password: 'pw' });
+  await ack(client(), 'create-room', { roomId: 'new-b', password: 'pw' });
+
+  // il roamer è Master di una sua stanza, poi entra in A come giocatore e infine va in B
+  await ack(roamer, 'create-room', { roomId: 'roamer-home', password: 'pw' });
+  await ack(roamer, 'join-room', { roomId: 'old-a', password: 'pw', playerName: 'R' });
+  await ack(roamer, 'join-room', { roomId: 'new-b', password: 'pw', playerName: 'R' });
+
+  const seen = [];
+  roamer.onAny((event) => seen.push(event));
+  dmA.emit('clear-canvas');
+  const { token } = await ack(dmA, 'add-token', { tokenData: { name: 'Goblin', hp: 7 } });
+  dmA.emit('update-token-hp', { tokenId: token.id, hp: 3 });
+  await wait(200);
+
+  assert.deepEqual(seen, [], 'nessun evento dalla stanza A');
+});
+
 test('la password da sola non dà il ruolo di Master', async () => {
   const dm = client();
   const player = client();

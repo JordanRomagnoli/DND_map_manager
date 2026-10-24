@@ -72,6 +72,14 @@ function attachSocketServer(httpServer) {
       io.to(audience || roomId).emit('action-logged', logRecord);
     };
 
+    // Un socket sta in una sola stanza: prima di entrare in un'altra esce dalla precedente
+    // (anche dalla sua stanza Master), così smette di riceverne eventi e HP
+    const leaveCurrentRoom = () => {
+      if (!socket.roomId) return;
+      socket.leave(socket.roomId);
+      socket.leave(masterRoom(socket.roomId));
+    };
+
     // CREA STANZA (Master)
     socket.on('create-room', ({ roomId, roomName, password, masterKey, gridSize, gridScale }, callback) => {
       const cleanRoomId = (roomId || '').trim().toLowerCase();
@@ -87,6 +95,7 @@ function attachSocketServer(httpServer) {
           return callback?.({ success: false, error: 'Stanza già esistente: solo il Master che l\'ha creata può gestirla.' });
         }
         existing.masterSocketId = socket.id;
+        leaveCurrentRoom();
         socket.join([cleanRoomId, masterRoom(cleanRoomId)]);
         socket.role = 'MASTER';
         socket.roomId = cleanRoomId;
@@ -112,6 +121,7 @@ function attachSocketServer(httpServer) {
       };
 
       rooms.set(cleanRoomId, newRoom);
+      leaveCurrentRoom();
       socket.join([cleanRoomId, masterRoom(cleanRoomId)]);
       socket.role = 'MASTER';
       socket.roomId = cleanRoomId;
@@ -138,7 +148,7 @@ function attachSocketServer(httpServer) {
         return callback?.({ success: false, error: 'Password errata.' });
       }
 
-      socket.leave(masterRoom(cleanRoomId)); // un ex Master che rientra come giocatore non vede più gli HP
+      leaveCurrentRoom(); // copre anche l'ex Master che rientra come giocatore nella stessa stanza
       socket.join(cleanRoomId);
       socket.role = role;
       socket.roomId = cleanRoomId;
