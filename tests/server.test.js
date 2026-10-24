@@ -88,6 +88,13 @@ test('dopo 10 password errate la stanza rifiuta altri tentativi', async () => {
   assert.ok(elsewhere.success, 'il blocco riguarda solo quella stanza');
 });
 
+test('un NPC messo a x=0, y=0 resta nel primo quadretto', async () => {
+  const dm = client();
+  await ack(dm, 'create-room', { roomId: 'origin', password: 'pw' });
+  const { token } = await ack(dm, 'add-token', { tokenData: { name: 'Ratto', x: 0, y: 0 } });
+  assert.deepEqual([token.x, token.y], [25, 25], 'centro del quadretto (0,0) con griglia da 50');
+});
+
 test('la password da sola non dà il ruolo di Master', async () => {
   const dm = client();
   const player = client();

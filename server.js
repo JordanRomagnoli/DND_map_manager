@@ -372,8 +372,8 @@ function attachSocketServer(httpServer) {
         return callback?.({ success: false, error: 'Solo il Master può aggiungere NPC/Token.' });
       }
 
-      const defaultX = tokenData.x || room.gridSize * 3.5;
-      const defaultY = tokenData.y || room.gridSize * 3.5;
+      const defaultX = tokenData.x ?? room.gridSize * 3.5;
+      const defaultY = tokenData.y ?? room.gridSize * 3.5;
       const snapped = snapToCellCenter(defaultX, defaultY, room.gridSize);
 
       const newToken = {
