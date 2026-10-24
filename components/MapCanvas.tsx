@@ -399,7 +399,8 @@ export default function MapCanvas({
           hasAvatarImage = true;
           const imgW = cachedImg.naturalWidth;
           const imgH = cachedImg.naturalHeight;
-          const maxDim = radius * 2.2; // Dimensione pedina
+          // L'avatar occupa l'intero quadretto, mantenendo le proporzioni dell'immagine
+          const maxDim = room.gridSize;
           if (imgW > imgH) {
             imgDrawW = maxDim;
             imgDrawH = maxDim * (imgH / imgW);
@@ -407,16 +408,6 @@ export default function MapCanvas({
             imgDrawH = maxDim;
             imgDrawW = maxDim * (imgW / imgH);
           }
-
-          // Anello/Base di selezione o appartenenza sotto la pedina
-          ctx.save();
-          ctx.shadowColor = 'transparent';
-          ctx.lineWidth = isSelected || isMine ? 3 / zoom : 2 / zoom;
-          ctx.strokeStyle = isSelected ? '#ffd700' : isMine ? '#3b82f6' : token.type === 'npc' ? '#ef4444' : '#ffffff';
-          ctx.beginPath();
-          ctx.ellipse(0, imgDrawH / 2 - 2 / zoom, imgDrawW / 2, Math.max(4 / zoom, imgDrawH / 5), 0, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.restore();
 
           // Disegna l'immagine direttamente come pedina (senza ritaglio a cerchio)
           ctx.drawImage(cachedImg, -imgDrawW / 2, -imgDrawH / 2, imgDrawW, imgDrawH);
@@ -564,6 +555,15 @@ export default function MapCanvas({
     setPan({ x: 0, y: 0 });
   };
 
+  // Pedina sotto il punto (la più in alto): con avatar conta tutto il quadretto, senza avatar il cerchio
+  const findTokenAt = (pos: { x: number; y: number }) =>
+    [...room.tokens].reverse().find((t) => {
+      const dx = pos.x - t.x;
+      const dy = pos.y - t.y;
+      if (t.avatarUrl) return Math.max(Math.abs(dx), Math.abs(dy)) <= room.gridSize / 2;
+      return Math.hypot(dx, dy) <= (t.size || room.gridSize * 0.8) / 2;
+    });
+
   // MOUSE DOWN: Inizio Pan, Trascinamento Token o Disegno
   const handleMouseDown = (e: React.MouseEvent) => {
     mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
@@ -580,12 +580,7 @@ export default function MapCanvas({
     // STRUMENTO SELEZIONA/SPOSTA TOKEN
     if (activeTool === 'select') {
       // Cerca se abbiamo cliccato sopra un token
-      const clickedToken = [...room.tokens].reverse().find((t) => {
-        const radius = (t.size || room.gridSize * 0.8) / 2;
-        const dx = worldPos.x - t.x;
-        const dy = worldPos.y - t.y;
-        return Math.sqrt(dx * dx + dy * dy) <= radius;
-      });
+      const clickedToken = findTokenAt(worldPos);
 
       if (clickedToken) {
         // CONTROLLO PERMESSI:
@@ -673,12 +668,7 @@ export default function MapCanvas({
       // Se la distanza del movimento è minima (< 5px), è un CLICK, non un trascinamento
       if (dist < 5 && e.button === 0) {
         const worldPos = screenToWorld(e.clientX, e.clientY);
-        const clickedToken = [...room.tokens].reverse().find((t) => {
-          const radius = (t.size || room.gridSize * 0.8) / 2;
-          const dX = worldPos.x - t.x;
-          const dY = worldPos.y - t.y;
-          return Math.sqrt(dX * dX + dY * dY) <= radius;
-        });
+        const clickedToken = findTokenAt(worldPos);
 
         if (clickedToken) {
           // PERMESSI: Master apre popover HP di TUTTI; Player SOLO per la sua pedina
