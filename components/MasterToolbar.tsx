@@ -10,7 +10,6 @@ import {
   PlusCircle,
   Trash2,
   Grid,
-  Magnet,
   Upload,
   Sparkles,
   Square,
@@ -174,14 +173,6 @@ export default function MasterToolbar({
     socket.emit('update-grid', {
       roomId: room.id,
       gridVisible: !room.gridVisible,
-    });
-  };
-
-  const handleToggleSnap = () => {
-    if (!socket) return;
-    socket.emit('update-grid', {
-      roomId: room.id,
-      snapToGrid: !room.snapToGrid,
     });
   };
 
@@ -394,19 +385,6 @@ export default function MasterToolbar({
               </Button>
             </TooltipTrigger>
             <TooltipContent>Mostra/Nascondi Griglia</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="icon"
-                className={room.snapToGrid ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-amber-500/30' : ''}
-                onClick={handleToggleSnap}
-              >
-                <Magnet size={20} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Attiva/Disattiva Magnetismo Griglia (Snap)</TooltipContent>
           </Tooltip>
 
           {/* Impostazione Metri per Quadrato (Scala Griglia) */}

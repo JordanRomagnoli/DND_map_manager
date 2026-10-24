@@ -62,7 +62,6 @@ export interface RoomState {
   gridScale?: number; // Scale in meters per cell (default: 1)
 
   gridVisible: boolean;
-  snapToGrid: boolean;
   backgroundUrl: string | null; // null = default white grid sheet
   tokens: Token[];
   drawings: DrawingStroke[];

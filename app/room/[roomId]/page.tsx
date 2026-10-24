@@ -255,7 +255,7 @@ export default function GameRoomPage() {
       });
     });
 
-    newSocket.on('grid-updated', ({ gridSize, gridScale, gridVisible, snapToGrid }) => {
+    newSocket.on('grid-updated', ({ gridSize, gridScale, gridVisible }) => {
       setRoom((prev) => {
         if (!prev) return null;
         return {
@@ -263,7 +263,6 @@ export default function GameRoomPage() {
           gridSize: gridSize ?? prev.gridSize,
           gridScale: gridScale ?? prev.gridScale,
           gridVisible: gridVisible ?? prev.gridVisible,
-          snapToGrid: snapToGrid ?? prev.snapToGrid,
         };
       });
     });

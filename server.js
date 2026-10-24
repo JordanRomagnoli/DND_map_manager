@@ -133,7 +133,6 @@ function attachSocketServer(httpServer) {
         gridSize: gridSize || 50,
         gridScale: gridScale || 1, // Scala di default: 1 metro per quadrato
         gridVisible: true,
-        snapToGrid: true,
         backgroundUrl: null,
         tokens: [],
         drawings: [],
@@ -508,7 +507,7 @@ function attachSocketServer(httpServer) {
     });
 
     // MODIFICA GRIGLIA (Master only)
-    socket.on('update-grid', ({ gridSize, gridScale, gridVisible, snapToGrid }) => {
+    socket.on('update-grid', ({ gridSize, gridScale, gridVisible }) => {
       const roomId = socket.roomId;
       const room = rooms.get(roomId);
       if (!room || socket.role !== 'MASTER') return;
@@ -516,13 +515,11 @@ function attachSocketServer(httpServer) {
       if (gridSize !== undefined) room.gridSize = gridSize;
       if (gridScale !== undefined) room.gridScale = gridScale;
       if (gridVisible !== undefined) room.gridVisible = gridVisible;
-      if (snapToGrid !== undefined) room.snapToGrid = snapToGrid;
 
       io.to(roomId).emit('grid-updated', {
         gridSize: room.gridSize,
         gridScale: room.gridScale,
         gridVisible: room.gridVisible,
-        snapToGrid: room.snapToGrid,
       });
 
       createAndBroadcastLog(
