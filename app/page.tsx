@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Shield,
@@ -47,6 +47,16 @@ export default function LandingPage() {
   const [joinPassword, setJoinPassword] = useState<string>('');
   const [playerName, setPlayerName] = useState<string>('');
   const [playerColor, setPlayerColor] = useState<string>('#3b82f6');
+
+  // Link d'invito del Master (/?join=<codice>): apre "Unisciti" con il codice già compilato.
+  // window.location invece di useSearchParams, che renderebbe la home non statica.
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('join');
+    if (code) {
+      setActiveTab('join');
+      setJoinRoomId(code);
+    }
+  }, []);
 
   // Error Messages
   const [errorMsg, setErrorMsg] = useState<string>('');

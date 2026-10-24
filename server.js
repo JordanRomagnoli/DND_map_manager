@@ -53,7 +53,8 @@ const ROOM_IDLE_TTL_MS = 6 * 60 * 60 * 1000;
 
 // Collega socket.io e tutta la logica delle stanze a un server HTTP (usato da main e dai test)
 // store (opzionale): salvataggio su disco delle stanze, vedi persistence.js
-function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, store = null } = {}) {
+// publicUrl (opzionale): link pubblico del tunnel, mostrato al Master per invitare i giocatori
+function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, store = null, publicUrl = null } = {}) {
   const io = new Server(httpServer, {
     cors: {
       origin: '*',
@@ -169,7 +170,7 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
         socket.role = 'MASTER';
         socket.roomId = cleanRoomId;
         socket.playerName = 'Master';
-        return callback?.({ success: true, room: publicRoom(existing), masterKey: existing.masterKey });
+        return callback?.({ success: true, room: publicRoom(existing), masterKey: existing.masterKey, publicUrl });
       }
 
       const newRoom = {
@@ -196,7 +197,7 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       socket.playerName = 'Master';
 
       console.log(`🏰 Stanza creata: ${cleanRoomId} dal Master ${socket.id}`);
-      callback?.({ success: true, room: publicRoom(newRoom), masterKey: newRoom.masterKey });
+      callback?.({ success: true, room: publicRoom(newRoom), masterKey: newRoom.masterKey, publicUrl });
 
       createAndBroadcastLog(cleanRoomId, 'Master', 'MASTER', 'USER_JOIN', `Il Master ha creato la stanza "${newRoom.name}".`);
     });
@@ -678,7 +679,7 @@ if (require.main === module) {
 
     // Le stanze vengono salvate in data/rooms e ricaricate quando qualcuno ci rientra
     const store = createRoomStore(path.join(__dirname, 'data', 'rooms'));
-    attachSocketServer(httpServer, { store });
+    attachSocketServer(httpServer, { store, publicUrl: process.env.PUBLIC_URL || null });
 
     // Alla chiusura (Ctrl+C o finestra del terminale chiusa) scrive i salvataggi ancora in attesa
     const shutdown = () => {

@@ -10,6 +10,7 @@ import PlayerToolbar from '@/components/PlayerToolbar';
 import TokenList from '@/components/TokenList';
 import ActionLogPanel from '@/components/ActionLogPanel';
 import InitiativePanel from '@/components/InitiativePanel';
+import InvitePanel from '@/components/InvitePanel';
 import { db } from '@/lib/db';
 import { Shield, KeyRound, ArrowLeft, AlertCircle, Crown, Copy, Check, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,9 @@ export default function GameRoomPage() {
 
   // UI state per copia codice stanza
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
+
+  // Link pubblico del tunnel (npm run sessione), inviato dal server solo al Master
+  const [publicUrl, setPublicUrl] = useState<string | null>(null);
 
 
   // Toolbar State per il Master
@@ -116,6 +120,7 @@ export default function GameRoomPage() {
           (res: any) => {
             if (res?.success) {
               localStorage.setItem(`dnd_masterkey_${roomId}`, res.masterKey);
+              setPublicUrl(res.publicUrl ?? null);
               setRoom(res.room);
               if (res.room?.logs) {
                 db.saveLogsBulk(res.room.logs);
@@ -406,6 +411,9 @@ export default function GameRoomPage() {
 
         {/* Pulsante Registro Azioni */}
         <ActionLogPanel roomId={room.id} role={role} socket={socket} />
+
+        {/* Master: QR e link per far entrare i giocatori */}
+        {role === 'MASTER' && <InvitePanel roomId={room.id} publicUrl={publicUrl} />}
 
         {/* Combattimento a iniziativa: ordine dei turni */}
         <InitiativePanel room={room} role={role} socket={socket} myTokenId={myTokenId} />
