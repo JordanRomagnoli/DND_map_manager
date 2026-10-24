@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
 import { RoomState, UserRole, Token, ActionLogRecord } from '@/lib/types';
@@ -31,6 +31,7 @@ export default function GameRoomPage() {
 
   // Socket & Room State
   const [socket, setSocket] = useState<Socket | null>(null);
+  const socketRef = useRef<Socket | null>(null); // la connessione attiva, da chiudere prima di aprirne un'altra
   const [room, setRoom] = useState<RoomState | null>(null);
   const [myTokenId, setMyTokenId] = useState<string | undefined>(undefined);
 
@@ -75,6 +76,12 @@ export default function GameRoomPage() {
     }
 
     connectSocket(urlRole, urlPassword, urlName, urlColor);
+
+    // Uscendo dalla pagina (o cambiando stanza) chiude la connessione: altrimenti resta nella stanza
+    return () => {
+      socketRef.current?.disconnect();
+      socketRef.current = null;
+    };
   }, [roomId]);
 
   const connectSocket = (
@@ -86,7 +93,9 @@ export default function GameRoomPage() {
     setAuthError(null);
     setPromptPassword(false);
 
+    socketRef.current?.disconnect(); // es. nuovo tentativo dopo una password errata
     const newSocket = io();
+    socketRef.current = newSocket;
     setSocket(newSocket);
 
     newSocket.on('connect', () => {
@@ -258,12 +267,6 @@ export default function GameRoomPage() {
         };
       });
     });
-
-    setSocket(newSocket);
-
-    return () => {
-      newSocket.disconnect();
-    };
   };
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
