@@ -77,7 +77,8 @@ export default function LandingPage() {
     sessionStorage.setItem(`dnd_password_${roomId}`, createPassword);
     sessionStorage.setItem(`dnd_name_${roomId}`, masterName);
 
-    router.push(`/room/${roomId}?role=MASTER&password=${encodeURIComponent(createPassword)}`);
+    // Credenziali solo in sessionStorage: nell'URL finirebbero in cronologia e nei link copiati
+    router.push(`/room/${roomId}`);
   };
 
   // Submit Unisciti Stanza (Player): la password viene verificata dal server socket all'ingresso
@@ -105,11 +106,7 @@ export default function LandingPage() {
     sessionStorage.setItem(`dnd_name_${roomId}`, playerName);
     sessionStorage.setItem(`dnd_color_${roomId}`, playerColor);
 
-    router.push(
-      `/room/${roomId}?role=PLAYER&password=${encodeURIComponent(joinPassword)}&name=${encodeURIComponent(
-        playerName
-      )}&color=${encodeURIComponent(playerColor)}`
-    );
+    router.push(`/room/${roomId}`);
   };
 
   return (

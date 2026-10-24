@@ -61,21 +61,22 @@ export default function GameRoomPage() {
 
     // Recupera parametri da URL o SessionStorage
     const urlRole = (searchParams.get('role') as UserRole) || sessionStorage.getItem(`dnd_role_${roomId}`) || 'PLAYER';
-    const urlPassword = searchParams.get('password') || sessionStorage.getItem(`dnd_password_${roomId}`) || '';
+    // La password non si legge mai dall'URL: solo da sessionStorage o dal form
+    const storedPassword = sessionStorage.getItem(`dnd_password_${roomId}`) || '';
     const urlName = searchParams.get('name') || sessionStorage.getItem(`dnd_name_${roomId}`) || 'Giocatore';
     const urlColor = searchParams.get('color') || sessionStorage.getItem(`dnd_color_${roomId}`) || '#3b82f6';
 
     setRole(urlRole);
-    setPassword(urlPassword);
+    setPassword(storedPassword);
     setPlayerName(urlName);
     setPlayerColor(urlColor);
 
-    if (!urlPassword && urlRole !== 'MASTER') {
+    if (!storedPassword && urlRole !== 'MASTER') {
       setPromptPassword(true);
       return;
     }
 
-    connectSocket(urlRole, urlPassword, urlName, urlColor);
+    connectSocket(urlRole, storedPassword, urlName, urlColor);
 
     // Uscendo dalla pagina (o cambiando stanza) chiude la connessione: altrimenti resta nella stanza
     return () => {
