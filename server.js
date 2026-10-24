@@ -204,7 +204,8 @@ app.prepare().then(() => {
     });
 
     // SPOSTAMENTO TOKEN IN TEMPO REALE (Ancorato al centro del quadrato)
-    socket.on('move-token', ({ roomId, tokenId, x, y }) => {
+    socket.on('move-token', ({ tokenId, x, y }) => {
+      const roomId = socket.roomId; // never trust the client's roomId: it could target another room
       const room = rooms.get(roomId);
       if (!room) return;
 
@@ -227,7 +228,8 @@ app.prepare().then(() => {
     });
 
     // FINE SPOSTAMENTO TOKEN (Trasmette l'animazione di scorrimento "trascinandosi" a tutti i partecipanti)
-    socket.on('move-token-end', ({ roomId, tokenId, startX, startY, endX, endY }) => {
+    socket.on('move-token-end', ({ tokenId, startX, startY, endX, endY }) => {
+      const roomId = socket.roomId;
       const room = rooms.get(roomId);
       if (!room) return;
 
@@ -283,7 +285,8 @@ app.prepare().then(() => {
 
 
     // AGGIORNAMENTO PUNTI VITA (HP & Max HP)
-    socket.on('update-token-hp', ({ roomId, tokenId, hp, maxHp }) => {
+    socket.on('update-token-hp', ({ tokenId, hp, maxHp }) => {
+      const roomId = socket.roomId;
       const room = rooms.get(roomId);
       if (!room) return;
 
@@ -317,7 +320,8 @@ app.prepare().then(() => {
     });
 
     // AGGIORNAMENTO AVATAR / IMMAGINE TOKEN
-    socket.on('update-token-avatar', ({ roomId, tokenId, avatarUrl }, callback) => {
+    socket.on('update-token-avatar', ({ tokenId, avatarUrl }, callback) => {
+      const roomId = socket.roomId;
       const room = rooms.get(roomId);
       if (!room) return callback?.({ success: false, error: 'Stanza non trovata.' });
 
@@ -350,7 +354,8 @@ app.prepare().then(() => {
     });
 
     // AGGIUNTA TOKEN / NPC (Master only)
-    socket.on('add-token', ({ roomId, tokenData }, callback) => {
+    socket.on('add-token', ({ tokenData }, callback) => {
+      const roomId = socket.roomId;
       const room = rooms.get(roomId);
       if (!room || socket.role !== 'MASTER') {
         return callback?.({ success: false, error: 'Solo il Master può aggiungere NPC/Token.' });
@@ -387,7 +392,8 @@ app.prepare().then(() => {
     });
 
     // RIMOZIONE TOKEN (Master only)
-    socket.on('remove-token', ({ roomId, tokenId }, callback) => {
+    socket.on('remove-token', ({ tokenId }, callback) => {
+      const roomId = socket.roomId;
       const room = rooms.get(roomId);
       if (!room || socket.role !== 'MASTER') {
         return callback?.({ success: false, error: 'Solo il Master può rimuovere token.' });
@@ -410,7 +416,8 @@ app.prepare().then(() => {
     });
 
     // TRATTI DI DISEGNO (Master only)
-    socket.on('draw-stroke', ({ roomId, stroke }) => {
+    socket.on('draw-stroke', ({ stroke }) => {
+      const roomId = socket.roomId;
       const room = rooms.get(roomId);
       if (!room || socket.role !== 'MASTER') return;
 
@@ -419,7 +426,8 @@ app.prepare().then(() => {
     });
 
     // PULIZIA CANVAS (Master only)
-    socket.on('clear-canvas', ({ roomId }) => {
+    socket.on('clear-canvas', () => {
+      const roomId = socket.roomId;
       const room = rooms.get(roomId);
       if (!room || socket.role !== 'MASTER') return;
 
@@ -436,7 +444,8 @@ app.prepare().then(() => {
     });
 
     // CARICAMENTO MAPPA DI SFONDO (Master only)
-    socket.on('update-background', ({ roomId, backgroundUrl }) => {
+    socket.on('update-background', ({ backgroundUrl }) => {
+      const roomId = socket.roomId;
       const room = rooms.get(roomId);
       if (!room || socket.role !== 'MASTER') return;
 
@@ -453,7 +462,8 @@ app.prepare().then(() => {
     });
 
     // MODIFICA GRIGLIA (Master only)
-    socket.on('update-grid', ({ roomId, gridSize, gridScale, gridVisible, snapToGrid }) => {
+    socket.on('update-grid', ({ gridSize, gridScale, gridVisible, snapToGrid }) => {
+      const roomId = socket.roomId;
       const room = rooms.get(roomId);
       if (!room || socket.role !== 'MASTER') return;
 
@@ -480,7 +490,8 @@ app.prepare().then(() => {
 
 
     // PULIZIA MANUALE REGISTRO AZIONI (Master only)
-    socket.on('clear-room-logs', ({ roomId }) => {
+    socket.on('clear-room-logs', () => {
+      const roomId = socket.roomId;
       const room = rooms.get(roomId);
       if (!room || socket.role !== 'MASTER') return;
 
