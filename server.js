@@ -1,15 +1,7 @@
 const { createServer } = require('http');
 const { randomUUID } = require('crypto');
 const parseUrl = require('url').parse;
-const next = require('next');
 const { Server } = require('socket.io');
-
-const dev = process.env.NODE_ENV !== 'production';
-const hostname = process.env.HOSTNAME || (dev ? 'localhost' : '0.0.0.0');
-const port = parseInt(process.env.PORT || '3000', 10);
-
-const app = next({ dev, hostname, port });
-const handle = app.getRequestHandler();
 
 // In-memory room store (in-sync with Supabase when configured)
 const rooms = new Map();
@@ -26,12 +18,8 @@ const playerView = (room, ownTokenId) => ({
   logs: (room.logs || []).filter((l) => !l.private),
 });
 
-app.prepare().then(() => {
-  const httpServer = createServer((req, res) => {
-    const parsedUrl = parseUrl(req.url, true);
-    handle(req, res, parsedUrl);
-  });
-
+// Collega socket.io e tutta la logica delle stanze a un server HTTP (usato da main e dai test)
+function attachSocketServer(httpServer) {
   const io = new Server(httpServer, {
     cors: {
       origin: '*',
@@ -542,9 +530,32 @@ app.prepare().then(() => {
     });
   });
 
+  return io;
+}
 
-  httpServer.listen(port, () => {
-    console.log(`> Ready on http://${hostname}:${port}`);
-    console.log(`> Server WebSockets attivo ed in ascolto per D&D Map Manager`);
+if (require.main === module) {
+  const next = require('next');
+
+  const dev = process.env.NODE_ENV !== 'production';
+  const hostname = process.env.HOSTNAME || (dev ? 'localhost' : '0.0.0.0');
+  const port = parseInt(process.env.PORT || '3000', 10);
+
+  const app = next({ dev, hostname, port });
+  const handle = app.getRequestHandler();
+
+  app.prepare().then(() => {
+    const httpServer = createServer((req, res) => {
+      const parsedUrl = parseUrl(req.url, true);
+      handle(req, res, parsedUrl);
+    });
+
+    attachSocketServer(httpServer);
+
+    httpServer.listen(port, () => {
+      console.log(`> Ready on http://${hostname}:${port}`);
+      console.log(`> Server WebSockets attivo ed in ascolto per D&D Map Manager`);
+    });
   });
-});
+}
+
+module.exports = { attachSocketServer };
