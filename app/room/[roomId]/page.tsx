@@ -209,6 +209,11 @@ export default function GameRoomPage() {
       setRoom((prev) => (prev ? { ...prev, engagements } : null));
     });
 
+    newSocket.on('room-deleted', () => {
+      alert('Il Master ha eliminato questa stanza.');
+      router.push('/');
+    });
+
     newSocket.on('token-moved-animated', ({ tokenId, endX, endY }) => {
       setRoom((prev) => {
         if (!prev) return null;

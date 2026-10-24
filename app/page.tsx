@@ -16,6 +16,7 @@ import {
   Map,
   Heart,
   Check,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -79,6 +80,25 @@ export default function LandingPage() {
     setJoinRoomId(roomId);
     setActiveTab(tab);
     setErrorMsg('');
+  };
+
+  // Elimina una stanza (solo Master): basta la chiave se questo browser ce l'ha, altrimenti la password del Master
+  const deleteRoom = (room: { id: string; name: string }) => {
+    const masterKey = localStorage.getItem(`dnd_masterkey_${room.id}`);
+    const masterPassword = masterKey ? null : prompt(`Password del Master per eliminare "${room.name}":`);
+    if (!masterKey && !masterPassword) return;
+    if (!confirm(`Eliminare definitivamente "${room.name}"? Mappa, pedine e disegni andranno persi.`)) return;
+
+    const socket = io();
+    socket.emit('delete-room', { roomId: room.id, masterKey, masterPassword }, (res: { success: boolean; error?: string }) => {
+      socket.disconnect();
+      if (!res?.success) {
+        setErrorMsg(res?.error || 'Impossibile eliminare la stanza.');
+        return;
+      }
+      localStorage.removeItem(`dnd_masterkey_${room.id}`);
+      setExistingRooms((prev) => prev.filter((r) => r.id !== room.id));
+    });
   };
 
   // Error Messages
@@ -203,6 +223,17 @@ export default function LandingPage() {
                       </Button>
                       <Button type="button" size="sm" variant="secondary" onClick={() => pickRoom(r.id, 'create')} className="h-8 px-2.5 text-xs gap-1 flex-1 sm:flex-none">
                         <Crown size={14} className="text-amber-400" /> Master
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => deleteRoom(r)}
+                        className="h-8 w-8 p-0 text-slate-400 hover:text-red-400"
+                        title={`Elimina ${r.name}`}
+                        aria-label={`Elimina ${r.name}`}
+                      >
+                        <Trash2 size={14} />
                       </Button>
                     </div>
                   ))}

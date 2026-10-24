@@ -581,3 +581,33 @@ test('elenco stanze per la home: codice e nome, anche dopo un riavvio, senza dat
     second.stop();
   }
 });
+
+test('il Master elimina una stanza: sparisce da elenco e disco, chi è dentro viene avvisato', async () => {
+  const dir = tempDir();
+  const srv = await startServer({ store: createRoomStore(dir, { saveDelayMs: 20 }) });
+  const list = () => new Promise((resolve) => srv.open().emit('list-rooms', resolve));
+  try {
+    const dm = srv.open();
+    const { masterKey } = await ack(dm, 'create-room', { roomId: 'addio', password: 'pw', masterPassword: 'm' });
+    const pl = srv.open();
+    await ack(pl, 'join-room', { roomId: 'addio', password: 'pw', playerName: 'A' });
+    let kicked = false;
+    pl.on('room-deleted', () => (kicked = true));
+    await wait(100);
+
+    const byPlayer = await ack(srv.open(), 'delete-room', { roomId: 'addio', masterPassword: 'pw' });
+    assert.equal(byPlayer.success, false, 'la password della stanza non basta');
+
+    const ok = await ack(srv.open(), 'delete-room', { roomId: 'addio', masterKey });
+    assert.ok(ok.success, 'con la chiave del Master');
+    await wait(100);
+
+    assert.ok(kicked, 'il giocatore collegato viene avvisato');
+    assert.deepEqual((await list()).map((r) => r.id), [], 'non è più in elenco');
+    assert.deepEqual(fs.readdirSync(dir), [], 'cancellata dal disco');
+    const join = await ack(srv.open(), 'join-room', { roomId: 'addio', password: 'pw', playerName: 'B' });
+    assert.equal(join.success, false, 'non si può più entrare');
+  } finally {
+    srv.stop();
+  }
+});

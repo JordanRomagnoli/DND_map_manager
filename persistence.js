@@ -79,6 +79,15 @@ function createRoomStore(dir, { saveDelayMs = SAVE_DELAY_MS } = {}) {
       pending.set(room.id, { room, timer });
     },
 
+    // Cancella la stanza dal disco (eliminata dal Master), compreso un eventuale salvataggio in attesa
+    remove(roomId) {
+      clearTimeout(pending.get(roomId)?.timer);
+      pending.delete(roomId);
+      savedBackgrounds.delete(roomId);
+      fs.rmSync(`${fileBase(roomId)}.json`, { force: true });
+      fs.rmSync(`${fileBase(roomId)}.bg`, { force: true });
+    },
+
     // Scrive subito i salvataggi in attesa (alla chiusura del server)
     flush() {
       for (const { room, timer } of pending.values()) {

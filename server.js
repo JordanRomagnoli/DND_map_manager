@@ -159,6 +159,38 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       callback?.([...byId.values()].sort((a, b) => b.updatedAt - a.updatedAt));
     });
 
+    // È il Master di questa stanza? Con la chiave salvata nel browser, oppure con la password del Master da
+    // qualsiasi dispositivo (la password della stanza è condivisa con i giocatori, quindi non basta).
+    // Restituisce il messaggio d'errore, o null se è il Master.
+    const masterAuthError = (room, { masterKey, masterPassword }) => {
+      const attemptKey = `${socket.handshake.address}|${room.id}`;
+      if (isJoinBlocked(attemptKey)) return 'Troppi tentativi errati. Riprova tra qualche minuto.';
+      const byKey = Boolean(masterKey) && room.masterKey === masterKey;
+      const byPassword = Boolean(masterPassword) && room.masterPassword === masterPassword;
+      if (byKey || byPassword) return null;
+      if (masterPassword) recordFailedJoin(attemptKey);
+      return masterPassword
+        ? 'Password del Master errata.'
+        : 'Questa stanza esiste già: per gestirla serve la password del Master.';
+    };
+
+    // ELIMINA STANZA (solo Master): irreversibile, toglie la stanza dalla memoria e dal disco
+    socket.on('delete-room', ({ roomId, masterKey, masterPassword }, callback) => {
+      const cleanRoomId = (roomId || '').trim().toLowerCase();
+      const room = getRoom(cleanRoomId);
+      if (!room) return callback?.({ success: false, error: 'La stanza non esiste più.' });
+
+      const authError = masterAuthError(room, { masterKey, masterPassword });
+      if (authError) return callback?.({ success: false, error: authError });
+
+      // chi è dentro viene avvisato e fatto uscire
+      io.to(cleanRoomId).emit('room-deleted');
+      io.in(cleanRoomId).socketsLeave([cleanRoomId, masterRoom(cleanRoomId)]);
+      rooms.delete(cleanRoomId);
+      store?.remove(cleanRoomId);
+      callback?.({ success: true });
+    });
+
     // CREA STANZA (Master)
     socket.on('create-room', ({ roomId, roomName, password, masterKey, masterPassword, gridSize, gridScale }, callback) => {
       const cleanRoomId = (roomId || '').trim().toLowerCase();
@@ -168,23 +200,8 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
 
       const existing = getRoom(cleanRoomId);
       if (existing) {
-        // Rientro del Master: con la chiave salvata nel browser, oppure con la password del Master da
-        // qualsiasi dispositivo. La password della stanza è condivisa con i giocatori, quindi non basta.
-        const attemptKey = `${socket.handshake.address}|${cleanRoomId}`;
-        if (isJoinBlocked(attemptKey)) {
-          return callback?.({ success: false, error: 'Troppi tentativi errati. Riprova tra qualche minuto.' });
-        }
-        const byKey = Boolean(masterKey) && existing.masterKey === masterKey;
-        const byPassword = Boolean(masterPassword) && existing.masterPassword === masterPassword;
-        if (!byKey && !byPassword) {
-          if (masterPassword) recordFailedJoin(attemptKey);
-          return callback?.({
-            success: false,
-            error: masterPassword
-              ? 'Password del Master errata.'
-              : 'Questa stanza esiste già: per gestirla serve la password del Master.',
-          });
-        }
+        const authError = masterAuthError(existing, { masterKey, masterPassword });
+        if (authError) return callback?.({ success: false, error: authError });
         leaveCurrentRoom();
         socket.join([cleanRoomId, masterRoom(cleanRoomId)]);
         socket.role = 'MASTER';
