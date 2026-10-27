@@ -62,6 +62,7 @@ export default function GameRoomPage() {
   // Toolbar State per il Master
   const [activeTool, setActiveTool] = useState<'select' | 'pan' | 'brush' | 'eraser' | 'shape' | 'fog-reveal' | 'fog-hide' | 'measure'>('select');
   const [measureKind, setMeasureKind] = useState<MeasureKind>('ruler');
+  const [hpSelection, setHpSelection] = useState<string[]>([]); // pedine per danni e cure di gruppo (Master)
   const [activeShape, setActiveShape] = useState<'rectangle' | 'circle'>('rectangle');
   const [brushColor, setBrushColor] = useState<string>('#000000');
   const [brushWidth, setBrushWidth] = useState<number>(5);
@@ -539,6 +540,7 @@ export default function GameRoomPage() {
         activeTool={activeTool}
         activeShape={activeShape}
         measureKind={measureKind}
+        onAreaTokens={role === 'MASTER' ? setHpSelection : undefined}
         brushColor={brushColor}
         brushWidth={brushWidth}
         centerTokenTrigger={centerTokenTrigger}
@@ -589,6 +591,8 @@ export default function GameRoomPage() {
         roomId={room.id}
         socket={socket}
         myTokenId={myTokenId}
+        selectedIds={hpSelection}
+        setSelectedIds={setHpSelection}
       />
     </main>
   );

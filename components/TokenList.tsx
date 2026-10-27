@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Users, Trash2, ChevronRight, ChevronLeft, Heart, Shield, Skull, Camera, Upload, Eye, EyeOff } from 'lucide-react';
 import { Token, UserRole } from '@/lib/types';
 import { Socket } from 'socket.io-client';
@@ -15,9 +15,11 @@ interface TokenListProps {
   roomId: string;
   socket: Socket | null;
   myTokenId?: string;
+  selectedIds: string[]; // pedine spuntate dal Master per danni e cure di gruppo
+  setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
-export default function TokenList({ tokens, role, roomId, socket, myTokenId }: TokenListProps) {
+export default function TokenList({ tokens, role, roomId, socket, myTokenId, selectedIds, setSelectedIds }: TokenListProps) {
   // Su telefono parte chiuso: aperto coprirebbe metà della mappa
   const [isOpen, setIsOpen] = useState<boolean>(() => typeof window === 'undefined' || window.innerWidth >= 640);
   const [filter, setFilter] = useState<'all' | 'player' | 'npc'>('all');
@@ -29,9 +31,11 @@ export default function TokenList({ tokens, role, roomId, socket, myTokenId }: T
     }
   };
 
-  // Danni e cure di gruppo (Master): pedine spuntate e quantità da applicare a tutte
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // Danni e cure di gruppo (Master): pedine spuntate (anche dall'area d'effetto, vedi la pagina) e quantità
   const [amount, setAmount] = useState<string>('');
+  useEffect(() => {
+    if (selectedIds.length > 0) setIsOpen(true); // un'area appena piazzata: l'elenco si apre con la barra pronta
+  }, [selectedIds]);
   const selected = selectedIds.filter((id) => tokens.some((t) => t.id === id)); // via le pedine rimosse
   const toggleSelected = (id: string) =>
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -196,9 +200,10 @@ export default function TokenList({ tokens, role, roomId, socket, myTokenId }: T
                       )}
 
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                        {/* il nome ha la precedenza: se non c'è spazio i badge vanno a capo invece di tagliarlo */}
+                        <div className="flex flex-wrap items-center justify-between gap-1 mb-0.5">
                           <span
-                            className={`text-xs font-bold truncate ${
+                            className={`text-xs font-bold break-words min-w-0 ${
                               isMine ? 'text-amber-300' : 'text-slate-100'
                             }`}
                           >

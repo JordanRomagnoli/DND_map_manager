@@ -138,6 +138,7 @@ interface MapCanvasProps {
   socket: Socket | null;
   activeTool: 'select' | 'pan' | 'brush' | 'eraser' | 'shape' | 'fog-reveal' | 'fog-hide' | 'measure';
   measureKind?: MeasureKind;
+  onAreaTokens?: (tokenIds: string[]) => void; // il Master ha piazzato un'area: le pedine che ci stanno dentro
   activeShape?: 'rectangle' | 'circle';
   brushColor: string;
   brushWidth: number;
@@ -152,6 +153,7 @@ export default function MapCanvas({
   activeTool,
   activeShape = 'rectangle',
   measureKind = 'ruler',
+  onAreaTokens,
   brushColor,
   brushWidth,
   centerTokenTrigger,
@@ -942,6 +944,11 @@ export default function MapCanvas({
       measureDragRef.current = null;
       const dragged = Math.hypot(m.x2 - m.x1, m.y2 - m.y1) >= room.gridSize / 2;
       socket?.emit('measure', dragged ? m : null);
+      // le pedine stanno al centro del quadretto: dentro l'area se il loro quadretto è evidenziato
+      if (dragged && m.kind !== 'ruler' && onAreaTokens) {
+        const shape = measureShape(m, room.gridSize);
+        onAreaTokens(room.tokens.filter((t) => shape.contains(t.x, t.y)).map((t) => t.id));
+      }
       return;
     }
 
