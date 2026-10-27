@@ -13,6 +13,7 @@ export interface Token {
   hp?: number;
   maxHp?: number;
   hidden?: boolean; // NPC nascosto dal Master: il server non lo invia ai giocatori
+  conditions?: string[]; // nomi delle condizioni attive (vedi CONDITIONS in lib/utils)
 }
 
 export type ShapeType = 'freehand' | 'rectangle' | 'circle';

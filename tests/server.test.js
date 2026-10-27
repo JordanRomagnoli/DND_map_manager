@@ -700,3 +700,24 @@ test("l'handout del Master arriva a tutti; i giocatori non possono mostrarne", a
     { imageUrl: null, title: '' },
   ]);
 });
+
+test('condizioni: il giocatore cambia solo le proprie, tutti le vedono', async () => {
+  const dm = client();
+  await ack(dm, 'create-room', { roomId: 'condizioni', password: 'pw' });
+  const { token: goblin } = await ack(dm, 'add-token', { tokenData: { name: 'Goblin' } });
+  const pl = client();
+  const { assignedTokenId: heroId } = await ack(pl, 'join-room', { roomId: 'condizioni', password: 'pw', playerName: 'A' });
+  const got = [];
+  dm.on('token-conditions-updated', (u) => got.push(u));
+
+  pl.emit('toggle-token-condition', { tokenId: goblin.id, condition: 'Prono' }); // non è sua
+  pl.emit('toggle-token-condition', { tokenId: heroId, condition: 'Avvelenato' });
+  dm.emit('toggle-token-condition', { tokenId: goblin.id, condition: 'Prono' });
+  dm.emit('toggle-token-condition', { tokenId: goblin.id, condition: 'Stordito' });
+  dm.emit('toggle-token-condition', { tokenId: goblin.id, condition: 'Prono' }); // tolta
+  await wait(200);
+
+  assert.deepEqual(got.at(0), { tokenId: heroId, conditions: ['Avvelenato'] });
+  assert.deepEqual(got.at(-1), { tokenId: goblin.id, conditions: ['Stordito'] });
+  assert.equal(got.length, 4);
+});

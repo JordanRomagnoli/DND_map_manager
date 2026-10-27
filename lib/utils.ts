@@ -98,6 +98,27 @@ export async function sendTokenAvatar(
   }
 }
 
+// Condizioni di D&D 5e attivabili sulle pedine, con il simbolo disegnato sopra la pedina
+export const CONDITIONS = [
+  { name: 'Accecato', icon: '🙈' },
+  { name: 'Affascinato', icon: '💘' },
+  { name: 'Afferrato', icon: '✊' },
+  { name: 'Assordato', icon: '🔇' },
+  { name: 'Avvelenato', icon: '🤢' },
+  { name: 'Incapacitato', icon: '😵' },
+  { name: 'Invisibile', icon: '👻' },
+  { name: 'Paralizzato', icon: '⚡' },
+  { name: 'Pietrificato', icon: '🗿' },
+  { name: 'Prono', icon: '🛌' },
+  { name: 'Spaventato', icon: '😱' },
+  { name: 'Stordito', icon: '💫' },
+  { name: 'Privo di sensi', icon: '💤' },
+  { name: 'Trattenuto', icon: '⛓️' },
+  { name: 'Concentrazione', icon: '🧠' },
+  { name: 'Esausto', icon: '🥱' },
+];
+export const conditionIcon = (name: string) => CONDITIONS.find((c) => c.name === name)?.icon ?? '❔';
+
 // Il punto è sotto la nebbia? Vince l'ultima area che lo contiene; fuori da ogni area è coperto
 export function isFogged(fog: FogOfWar | undefined, x: number, y: number): boolean {
   if (!fog?.enabled) return false;

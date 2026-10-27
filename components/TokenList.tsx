@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Users, Trash2, ChevronRight, ChevronLeft, Heart, Shield, Skull, Camera, Upload, Eye, EyeOff } from 'lucide-react';
 import { Token, UserRole } from '@/lib/types';
 import { Socket } from 'socket.io-client';
-import { sendTokenAvatar } from '@/lib/utils';
+import { sendTokenAvatar, conditionIcon } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
@@ -139,6 +139,11 @@ export default function TokenList({ tokens, role, roomId, socket, myTokenId }: T
 
                           <div className="flex items-center gap-1 shrink-0">
                             {isNpc && <Badge variant="npc">NPC</Badge>}
+                            {token.conditions?.map((c) => (
+                              <span key={c} title={c} className="text-xs">
+                                {conditionIcon(c)}
+                              </span>
+                            ))}
                             {isMine && <Badge variant="player">Tu</Badge>}
                           </div>
                         </div>

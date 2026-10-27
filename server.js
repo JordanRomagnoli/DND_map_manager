@@ -486,6 +486,36 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       );
     });
 
+    // CONDIZIONI (Master su tutte le pedine, giocatore sulla propria): attiva o toglie una condizione.
+    // Visibili a tutti come le pedine; l'elenco dei nomi validi sta nel client (lib/utils CONDITIONS).
+    socket.on('toggle-token-condition', ({ tokenId, condition } = {}) => {
+      const roomId = socket.roomId;
+      const room = rooms.get(roomId);
+      if (!room || typeof condition !== 'string' || !condition.trim() || condition.length > 30) return;
+
+      const token = room.tokens.find((t) => t.id === tokenId);
+      if (!token) return;
+      if (socket.role !== 'MASTER' && token.ownerId !== socket.id && socket.tokenId !== tokenId) return;
+
+      const name = condition.trim();
+      const current = token.conditions || [];
+      const active = !current.includes(name);
+      if (active && current.length >= 16) return;
+      token.conditions = active ? [...current, name] : current.filter((c) => c !== name);
+
+      io.to(hiddenAudience(roomId, token) || roomId).emit('token-conditions-updated', { tokenId, conditions: token.conditions });
+
+      createAndBroadcastLog(
+        roomId,
+        socket.playerName || (socket.role === 'MASTER' ? 'Master' : token.name),
+        socket.role,
+        'HP_UPDATE',
+        active ? `"${token.name}" ha ora la condizione ${name}.` : `"${token.name}" non ha più la condizione ${name}.`,
+        {},
+        hiddenAudience(roomId, token)
+      );
+    });
+
     // AGGIORNAMENTO AVATAR / IMMAGINE TOKEN
     socket.on('update-token-avatar', ({ tokenId, avatarUrl }, callback) => {
       const roomId = socket.roomId;
