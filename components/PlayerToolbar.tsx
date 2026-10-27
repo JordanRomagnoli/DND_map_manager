@@ -154,7 +154,7 @@ export default function PlayerToolbar({
               }`}
             >
               <Gamepad2 size={14} />
-              <span>D-Pad Passo</span>
+              <span>D-Pad</span>
             </button>
 
             <button

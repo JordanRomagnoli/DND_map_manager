@@ -12,6 +12,7 @@ import ActionLogPanel from '@/components/ActionLogPanel';
 import InitiativePanel from '@/components/InitiativePanel';
 import InvitePanel from '@/components/InvitePanel';
 import HandoutViewer from '@/components/HandoutViewer';
+import TurnAlert from '@/components/TurnAlert';
 import { db } from '@/lib/db';
 import { hiddenByFog } from '@/lib/utils';
 import type { MeasureKind } from '@/lib/measure';
@@ -583,6 +584,14 @@ export default function GameRoomPage() {
 
 
       <HandoutViewer socket={socket} role={role} />
+
+      {role === 'PLAYER' && (
+        <TurnAlert
+          initiative={room.initiative}
+          myTokenId={myTokenId}
+          myName={room.tokens.find((t) => t.id === myTokenId)?.name}
+        />
+      )}
 
       {/* 3. SIDEBAR LISTA TOKEN IN CAMPO */}
       <TokenList
