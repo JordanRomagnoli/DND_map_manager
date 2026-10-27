@@ -11,6 +11,7 @@ import TokenList from '@/components/TokenList';
 import ActionLogPanel from '@/components/ActionLogPanel';
 import InitiativePanel from '@/components/InitiativePanel';
 import InvitePanel from '@/components/InvitePanel';
+import HandoutViewer from '@/components/HandoutViewer';
 import { db } from '@/lib/db';
 import { hiddenByFog } from '@/lib/utils';
 import { Shield, KeyRound, ArrowLeft, AlertCircle, Crown, Copy, Check, LogOut } from 'lucide-react';
@@ -554,6 +555,8 @@ export default function GameRoomPage() {
         />
       )}
 
+
+      <HandoutViewer socket={socket} role={role} />
 
       {/* 3. SIDEBAR LISTA TOKEN IN CAMPO */}
       <TokenList

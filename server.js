@@ -741,6 +741,23 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       });
     });
 
+    // HANDOUT (Master only): un'immagine mostrata a schermo intero a tutti; imageUrl null la chiude per tutti.
+    // Non viene salvata nella stanza: chi entra dopo non la vede.
+    socket.on('show-handout', ({ imageUrl, title } = {}) => {
+      const roomId = socket.roomId;
+      const room = rooms.get(roomId);
+      if (!room || socket.role !== 'MASTER') return;
+      if (imageUrl !== null && !(typeof imageUrl === 'string' && imageUrl.startsWith('data:image/'))) return;
+
+      const cleanTitle = typeof title === 'string' ? title.trim().slice(0, 100) : '';
+      io.to(roomId).emit('handout-updated', { imageUrl, title: cleanTitle });
+
+      if (imageUrl) {
+        const named = cleanTitle ? `: "${cleanTitle}"` : '.';
+        createAndBroadcastLog(roomId, 'Master', 'MASTER', 'MAP_CHANGE', `Il Master mostra un handout${named}`);
+      }
+    });
+
     // TRATTI DI DISEGNO (Master only)
     socket.on('draw-stroke', ({ stroke }) => {
       const roomId = socket.roomId;

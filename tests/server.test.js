@@ -680,3 +680,23 @@ test('il ping di un giocatore arriva a tutta la stanza, col suo nome e colore', 
 
   assert.deepEqual(got, [{ x: 10, y: 20, name: 'Aria', color: '#00ff00' }]);
 });
+
+test("l'handout del Master arriva a tutti; i giocatori non possono mostrarne", async () => {
+  const dm = client();
+  await ack(dm, 'create-room', { roomId: 'handout', password: 'pw' });
+  const pl = client();
+  await ack(pl, 'join-room', { roomId: 'handout', password: 'pw', playerName: 'A' });
+  const got = [];
+  pl.on('handout-updated', (h) => got.push(h));
+
+  pl.emit('show-handout', { imageUrl: 'data:image/png;base64,AAAA', title: 'falso' });
+  dm.emit('show-handout', { imageUrl: 'javascript:alert(1)' }); // scartato: solo immagini
+  dm.emit('show-handout', { imageUrl: 'data:image/png;base64,AAAA', title: ' Lettera ' });
+  dm.emit('show-handout', { imageUrl: null });
+  await wait(200);
+
+  assert.deepEqual(got, [
+    { imageUrl: 'data:image/png;base64,AAAA', title: 'Lettera' },
+    { imageUrl: null, title: '' },
+  ]);
+});

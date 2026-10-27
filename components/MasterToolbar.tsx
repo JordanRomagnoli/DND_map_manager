@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   MousePointer,
   Hand,
@@ -18,6 +18,7 @@ import {
   Ruler,
   Camera,
   CloudFog,
+  ScrollText,
   Eye,
   EyeOff,
 } from 'lucide-react';
@@ -118,6 +119,28 @@ export default function MasterToolbar({
     setShowNpcModal(false);
     setNpcName('');
     setNpcAvatarUrl('');
+  };
+
+  // Handout: immagine mostrata a schermo intero a tutti i giocatori
+  const handoutInputRef = useRef<HTMLInputElement | null>(null);
+  const handleHandoutUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // così si può rimostrare lo stesso file
+    if (!file || !socket) return;
+
+    try {
+      const imageUrl = await resizeImageFile(file, 1600);
+      if (imageUrl.length > 9_500_000) {
+        alert("L'immagine è troppo pesante anche dopo il ridimensionamento. Prova con un'immagine più piccola.");
+        return;
+      }
+      const title = prompt("Titolo dell'handout (facoltativo):", file.name.replace(/\.[^.]+$/, ''));
+      if (title === null) return; // annullato
+      socket.emit('show-handout', { imageUrl, title });
+    } catch (err) {
+      console.error('Error uploading handout:', err);
+      alert('Impossibile leggere questa immagine.');
+    }
   };
 
   // Caricamento File Mappa Locale JPG/PNG
@@ -391,6 +414,20 @@ export default function MasterToolbar({
             </TooltipTrigger>
             <TooltipContent>Evoca Nuovo NPC / Mostro</TooltipContent>
           </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="icon"
+                className="hover:border-amber-400 hover:text-amber-400"
+                onClick={() => handoutInputRef.current?.click()}
+              >
+                <ScrollText size={20} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Mostra un Handout a tutti (lettera, ritratto, oggetto)</TooltipContent>
+          </Tooltip>
+          <input ref={handoutInputRef} type="file" accept="image/*" onChange={handleHandoutUpload} className="hidden" />
         </div>
 
         <div className="toolbar-divider" />
