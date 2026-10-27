@@ -17,7 +17,12 @@ import {
   Camera,
   Upload,
   Trash2,
+  Ruler,
+  CircleDot,
+  Triangle,
+  MoveRight,
 } from 'lucide-react';
+import type { MeasureKind } from '@/lib/measure';
 import { sendTokenAvatar } from '@/lib/utils';
 import { Token } from '@/lib/types';
 import { Socket } from 'socket.io-client';
@@ -34,7 +39,17 @@ interface PlayerToolbarProps {
   socket: Socket | null;
   canMove: boolean; // false in combattimento quando non è il turno di questo giocatore
   onCenterOnToken?: () => void;
+  measuring: boolean; // strumento Misura attivo
+  measureKind: MeasureKind;
+  onMeasure: (kind: MeasureKind | null) => void; // null = torna a muovere la pedina
 }
+
+const MEASURE_TOOLS: { kind: MeasureKind; label: string; Icon: typeof Ruler }[] = [
+  { kind: 'ruler', label: 'Righello', Icon: Ruler },
+  { kind: 'sphere', label: 'Sfera', Icon: CircleDot },
+  { kind: 'cone', label: 'Cono', Icon: Triangle },
+  { kind: 'line', label: 'Linea', Icon: MoveRight },
+];
 
 export default function PlayerToolbar({
   playerToken,
@@ -45,8 +60,17 @@ export default function PlayerToolbar({
   socket,
   canMove,
   onCenterOnToken,
+  measuring,
+  measureKind,
+  onMeasure,
 }: PlayerToolbarProps) {
-  const [activeTab, setActiveTab] = useState<'CARD' | 'DPAD'>('CARD');
+  const [activeTab, setActiveTab] = useState<'CARD' | 'DPAD' | 'MEASURE'>('CARD');
+
+  // Uscendo dalla scheda Misura si torna a muovere la pedina
+  const selectTab = (tab: 'CARD' | 'DPAD' | 'MEASURE') => {
+    setActiveTab(tab);
+    if (tab !== 'MEASURE' && measuring) onMeasure(null);
+  };
 
   // Spostamento a step con il D-Pad tattico (1 quadrato alla volta con animazione di scorrimento)
   const handleMoveStep = (dx: number, dy: number) => {
@@ -110,7 +134,7 @@ export default function PlayerToolbar({
         <div className="flex items-center justify-between gap-1.5 border-b border-slate-800/80 pb-2">
           <div className="flex items-center gap-1 bg-slate-900/80 p-0.5 rounded-xl border border-slate-800">
             <button
-              onClick={() => setActiveTab('CARD')}
+              onClick={() => selectTab('CARD')}
               className={`px-3 py-1 text-xs rounded-lg font-semibold transition-all flex items-center gap-1.5 ${
                 activeTab === 'CARD'
                   ? 'bg-blue-600 text-white shadow-md'
@@ -122,7 +146,7 @@ export default function PlayerToolbar({
             </button>
 
             <button
-              onClick={() => setActiveTab('DPAD')}
+              onClick={() => selectTab('DPAD')}
               className={`px-3 py-1 text-xs rounded-lg font-semibold transition-all flex items-center gap-1.5 ${
                 activeTab === 'DPAD'
                   ? 'bg-blue-600 text-white shadow-md'
@@ -131,6 +155,18 @@ export default function PlayerToolbar({
             >
               <Gamepad2 size={14} />
               <span>D-Pad Passo</span>
+            </button>
+
+            <button
+              onClick={() => selectTab('MEASURE')}
+              className={`px-3 py-1 text-xs rounded-lg font-semibold transition-all flex items-center gap-1.5 ${
+                activeTab === 'MEASURE'
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Ruler size={14} />
+              <span>Misura</span>
             </button>
           </div>
 
@@ -148,6 +184,38 @@ export default function PlayerToolbar({
             </Button>
           )}
         </div>
+
+        {/* CONTENUTO TAB MISURA: righello e aree d'effetto */}
+        {activeTab === 'MEASURE' && (
+          <div className="space-y-2">
+            <div className="grid grid-cols-4 gap-1.5">
+              {MEASURE_TOOLS.map(({ kind, label, Icon }) => {
+                const on = measuring && measureKind === kind;
+                return (
+                  <button
+                    key={kind}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => onMeasure(on ? null : kind)}
+                    className={`flex flex-col items-center gap-1 py-2 rounded-xl border text-[11px] font-semibold transition-colors ${
+                      on
+                        ? 'bg-blue-600 border-blue-400 text-white'
+                        : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    <Icon size={18} />
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-slate-400 leading-snug">
+              {measuring
+                ? 'Trascina sulla mappa: tutti vedono la misura. Un clic senza trascinare la toglie.'
+                : 'Scegli cosa misurare, poi trascina sulla mappa.'}
+            </p>
+          </div>
+        )}
 
         {/* CONTENUTO TAB 1: SCHEDA PERSONAGGIO ED HP RAPIDI */}
         {activeTab === 'CARD' && (

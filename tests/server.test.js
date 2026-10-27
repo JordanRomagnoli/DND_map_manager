@@ -803,3 +803,24 @@ test('scene dopo un riavvio: ogni mappa nel suo file, eliminata con la scena', a
     second.stop();
   }
 });
+
+test('misure: arrivano a tutti col nome dell\'autore e spariscono quando esce', async () => {
+  const dm = client();
+  await ack(dm, 'create-room', { roomId: 'misure', password: 'pw' });
+  const pl = client();
+  await ack(pl, 'join-room', { roomId: 'misure', password: 'pw', playerName: 'Maga', playerColor: '#a855f7' });
+  const got = [];
+  dm.on('measured', (m) => got.push(m));
+
+  pl.emit('measure', { kind: 'meteor', x1: 0, y1: 0, x2: 1, y2: 1 }); // tipo sconosciuto: scartata
+  pl.emit('measure', { kind: 'sphere', x1: 100, y1: 100, x2: 'x', y2: 1 }); // coordinate non valide
+  pl.emit('measure', { kind: 'sphere', x1: 100, y1: 100, x2: 300, y2: 100 });
+  await wait(100);
+  pl.disconnect();
+  await wait(100);
+
+  assert.deepEqual(got, [
+    { id: pl.id ?? got[0].id, measure: { kind: 'sphere', x1: 100, y1: 100, x2: 300, y2: 100, name: 'Maga', color: '#a855f7' } },
+    { id: got[0].id, measure: null },
+  ]);
+});

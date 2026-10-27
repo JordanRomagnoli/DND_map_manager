@@ -17,6 +17,9 @@ import {
   Ruler,
   CloudFog,
   ScrollText,
+  Triangle,
+  CircleDot,
+  MoveRight,
   Layers,
   Sun,
   Eye,
@@ -26,6 +29,7 @@ import {
 import { RoomState } from '@/lib/types';
 import { Socket } from 'socket.io-client';
 import { cn, resizeImageFile } from '@/lib/utils';
+import type { MeasureKind } from '@/lib/measure';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -40,6 +44,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+
+const MEASURE_TOOLS: { kind: MeasureKind; label: string; icon: React.ReactNode }[] = [
+  { kind: 'ruler', label: 'Righello', icon: <Ruler size={18} /> },
+  { kind: 'sphere', label: 'Sfera', icon: <CircleDot size={18} /> },
+  { kind: 'cone', label: 'Cono', icon: <Triangle size={18} /> },
+  { kind: 'line', label: 'Linea', icon: <MoveRight size={18} /> },
+];
 
 const BRUSH_COLORS = ['#1e293b', '#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#ffffff'];
 const BRUSH_WIDTHS = [
@@ -91,8 +102,10 @@ const Divider = () => <div className="w-px self-stretch my-1 bg-white/10 shrink-
 interface MasterToolbarProps {
   room: RoomState;
   socket: Socket | null;
-  activeTool: 'select' | 'pan' | 'brush' | 'eraser' | 'shape' | 'fog-reveal' | 'fog-hide';
-  setActiveTool: (tool: 'select' | 'pan' | 'brush' | 'eraser' | 'shape' | 'fog-reveal' | 'fog-hide') => void;
+  activeTool: 'select' | 'pan' | 'brush' | 'eraser' | 'shape' | 'fog-reveal' | 'fog-hide' | 'measure';
+  setActiveTool: (tool: 'select' | 'pan' | 'brush' | 'eraser' | 'shape' | 'fog-reveal' | 'fog-hide' | 'measure') => void;
+  measureKind: MeasureKind;
+  setMeasureKind: (kind: MeasureKind) => void;
   activeShape: 'rectangle' | 'circle';
   setActiveShape: (shape: 'rectangle' | 'circle') => void;
   brushColor: string;
@@ -108,6 +121,8 @@ export default function MasterToolbar({
   setActiveTool,
   activeShape,
   setActiveShape,
+  measureKind,
+  setMeasureKind,
   brushColor,
   setBrushColor,
   brushWidth,
@@ -354,6 +369,23 @@ export default function MasterToolbar({
           </div>
         )}
 
+        {activeTool === 'measure' && (
+          <div className="glass-panel flex items-center gap-1.5 px-2 py-1.5 max-w-full overflow-x-auto">
+            {MEASURE_TOOLS.map(({ kind, label, icon }) => (
+              <ToolButton
+                key={kind}
+                icon={icon}
+                label={label}
+                active={measureKind === kind}
+                onClick={() => setMeasureKind(kind)}
+              />
+            ))}
+            <span className="hidden md:block max-w-[220px] px-2 text-[11px] leading-snug text-slate-400">
+              Trascina sulla mappa: tutti vedono la misura. Un clic senza trascinare la toglie.
+            </span>
+          </div>
+        )}
+
         {isFogTool && (
           <div className="glass-panel flex items-center gap-1.5 px-2 py-1.5 max-w-full overflow-x-auto">
             <ToolButton icon={<Eye size={18} />} label="Rivela" active={activeTool === 'fog-reveal'} onClick={() => setActiveTool('fog-reveal')} />
@@ -388,6 +420,13 @@ export default function MasterToolbar({
               active={isFogTool}
               onClick={handleFogMode}
               title={fog.enabled ? 'La nebbia è attiva: clic per rivelare o ricoprire' : 'Avvolgi la mappa nella nebbia di guerra'}
+            />
+            <ToolButton
+              icon={<Ruler size={20} />}
+              label="Misura"
+              active={activeTool === 'measure'}
+              onClick={() => setActiveTool('measure')}
+              title="Righello e aree d'effetto degli incantesimi"
             />
           </ToolGroup>
 

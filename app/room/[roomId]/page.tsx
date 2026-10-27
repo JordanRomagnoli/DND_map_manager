@@ -14,6 +14,7 @@ import InvitePanel from '@/components/InvitePanel';
 import HandoutViewer from '@/components/HandoutViewer';
 import { db } from '@/lib/db';
 import { hiddenByFog } from '@/lib/utils';
+import type { MeasureKind } from '@/lib/measure';
 import { Shield, KeyRound, ArrowLeft, AlertCircle, Crown, Copy, Check, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -59,7 +60,8 @@ export default function GameRoomPage() {
 
 
   // Toolbar State per il Master
-  const [activeTool, setActiveTool] = useState<'select' | 'pan' | 'brush' | 'eraser' | 'shape' | 'fog-reveal' | 'fog-hide'>('select');
+  const [activeTool, setActiveTool] = useState<'select' | 'pan' | 'brush' | 'eraser' | 'shape' | 'fog-reveal' | 'fog-hide' | 'measure'>('select');
+  const [measureKind, setMeasureKind] = useState<MeasureKind>('ruler');
   const [activeShape, setActiveShape] = useState<'rectangle' | 'circle'>('rectangle');
   const [brushColor, setBrushColor] = useState<string>('#000000');
   const [brushWidth, setBrushWidth] = useState<number>(5);
@@ -536,6 +538,7 @@ export default function GameRoomPage() {
         socket={socket}
         activeTool={activeTool}
         activeShape={activeShape}
+        measureKind={measureKind}
         brushColor={brushColor}
         brushWidth={brushWidth}
         centerTokenTrigger={centerTokenTrigger}
@@ -550,6 +553,8 @@ export default function GameRoomPage() {
           setActiveTool={setActiveTool}
           activeShape={activeShape}
           setActiveShape={setActiveShape}
+          measureKind={measureKind}
+          setMeasureKind={setMeasureKind}
           brushColor={brushColor}
           setBrushColor={setBrushColor}
           brushWidth={brushWidth}
@@ -565,6 +570,12 @@ export default function GameRoomPage() {
           socket={socket}
           canMove={!room.initiative || room.initiative.activeTokenId === myTokenId}
           onCenterOnToken={() => setCenterTokenTrigger(Date.now())}
+          measuring={activeTool === 'measure'}
+          measureKind={measureKind}
+          onMeasure={(kind) => {
+            if (kind) setMeasureKind(kind);
+            setActiveTool(kind ? 'measure' : 'select');
+          }}
         />
       )}
 

@@ -5,6 +5,7 @@ import { RoomState, Token, DrawingStroke, UserRole, FogArea, FogOfWar } from '@/
 import { Socket } from 'socket.io-client';
 import { Plus, Minus, Maximize2, Heart, Shield, Skull, Check, Camera, Upload, Image as ImageIcon, Trash2, Swords, Activity } from 'lucide-react';
 import { sendTokenAvatar, hiddenByFog, CONDITIONS, conditionIcon } from '@/lib/utils';
+import { measureShape, cellsInShape, type Measure, type MeasureKind } from '@/lib/measure';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -59,6 +60,74 @@ function fogAreaFrom(points: { x: number; y: number }[], gridSize: number, hide:
   };
 }
 
+const MEASURE_LABELS: Record<MeasureKind, string> = { ruler: '', sphere: 'raggio ', cone: 'cono ', line: 'linea ' };
+
+// Righello o area d'effetto: quadretti colpiti evidenziati, contorno e distanza in metri
+function drawMeasure(
+  ctx: CanvasRenderingContext2D,
+  m: Measure & { color: string; name?: string },
+  grid: number,
+  scale: number,
+  zoom: number
+) {
+  const shape = measureShape(m, grid);
+  const { sx, sy, ex, ey } = shape;
+  ctx.save();
+  ctx.strokeStyle = m.color;
+  ctx.fillStyle = m.color;
+  ctx.lineWidth = 2.5 / zoom;
+
+  if (m.kind === 'ruler') {
+    ctx.setLineDash([8 / zoom, 5 / zoom]);
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    [[sx, sy], [ex, ey]].forEach(([x, y]) => {
+      ctx.beginPath();
+      ctx.arc(x, y, 4 / zoom, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  } else {
+    ctx.globalAlpha = 0.25;
+    cellsInShape(shape, grid).forEach((c) => ctx.fillRect(c.x - grid / 2, c.y - grid / 2, grid, grid));
+    ctx.globalAlpha = 1;
+
+    const len = shape.cells * grid;
+    const [cos, sin] = [(ex - sx) / len, (ey - sy) / len];
+    ctx.beginPath();
+    if (m.kind === 'sphere') {
+      ctx.arc(sx, sy, len, 0, Math.PI * 2);
+    } else {
+      const half = m.kind === 'cone' ? len / 2 : grid / 2; // metà larghezza in fondo
+      const start = m.kind === 'cone' ? 0 : grid / 2;
+      ctx.moveTo(sx - sin * start, sy + cos * start);
+      ctx.lineTo(ex - sin * half, ey + cos * half);
+      ctx.lineTo(ex + sin * half, ey - cos * half);
+      ctx.lineTo(sx + sin * start, sy - cos * start);
+      ctx.closePath();
+    }
+    ctx.stroke();
+  }
+
+  const meters = Math.round(shape.cells * scale * 10) / 10;
+  const text = `${m.name ? `${m.name}: ` : ''}${MEASURE_LABELS[m.kind]}${meters} m`;
+  ctx.font = `bold ${Math.max(12, 13 / zoom)}px Outfit, sans-serif`;
+  const w = ctx.measureText(text).width + 12 / zoom;
+  const [lx, ly] = [ex, ey - 18 / zoom];
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+  ctx.fillRect(lx - w / 2, ly - 11 / zoom, w, 22 / zoom);
+  ctx.strokeStyle = m.color;
+  ctx.lineWidth = 1 / zoom;
+  ctx.strokeRect(lx - w / 2, ly - 11 / zoom, w, 22 / zoom);
+  ctx.fillStyle = '#f8fafc';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, lx, ly);
+  ctx.restore();
+}
+
 const PING_MS = 2000;
 const LONG_PRESS_MS = 500;
 
@@ -67,7 +136,8 @@ interface MapCanvasProps {
   role: UserRole;
   myTokenId?: string;
   socket: Socket | null;
-  activeTool: 'select' | 'pan' | 'brush' | 'eraser' | 'shape' | 'fog-reveal' | 'fog-hide';
+  activeTool: 'select' | 'pan' | 'brush' | 'eraser' | 'shape' | 'fog-reveal' | 'fog-hide' | 'measure';
+  measureKind?: MeasureKind;
   activeShape?: 'rectangle' | 'circle';
   brushColor: string;
   brushWidth: number;
@@ -81,6 +151,7 @@ export default function MapCanvas({
   socket,
   activeTool,
   activeShape = 'rectangle',
+  measureKind = 'ruler',
   brushColor,
   brushWidth,
   centerTokenTrigger,
@@ -175,6 +246,22 @@ export default function MapCanvas({
     socket.on('map-pinged', handlePing);
     return () => {
       socket.off('map-pinged', handlePing);
+    };
+  }, [socket]);
+
+  // Misure visibili a tutti (una per persona, per id del socket) e quella che sto trascinando
+  const measuresRef = useRef<Map<string, Measure & { color: string; name?: string }>>(new Map());
+  const measureDragRef = useRef<Measure | null>(null);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleMeasured = ({ id, measure }: { id: string; measure: (Measure & { color: string; name?: string }) | null }) => {
+      if (measure) measuresRef.current.set(id, measure);
+      else measuresRef.current.delete(id);
+    };
+    socket.on('measured', handleMeasured);
+    return () => {
+      socket.off('measured', handleMeasured);
     };
   }, [socket]);
 
@@ -605,6 +692,13 @@ export default function MapCanvas({
       ctx.restore();
     });
 
+    // 4.5 MISURE: quelle di tutti, più quella che sto trascinando (che sostituisce la mia precedente)
+    const scale = room.gridScale || 1;
+    measuresRef.current.forEach((m, id) => {
+      if (!(measureDragRef.current && id === socket?.id)) drawMeasure(ctx, m, room.gridSize, scale, zoom);
+    });
+    if (measureDragRef.current) drawMeasure(ctx, { ...measureDragRef.current, color: '#fbbf24' }, room.gridSize, scale, zoom);
+
     // 5. PING: onde che si allargano attorno al punto indicato e svaniscono, col nome di chi l'ha fatto
     const now = Date.now();
     pingsRef.current = pingsRef.current.filter((p) => now - p.start < PING_MS);
@@ -635,6 +729,7 @@ export default function MapCanvas({
     pan,
     zoom,
     room,
+    socket,
     isDrawing,
     isFogTool,
     activeTool,
@@ -733,6 +828,12 @@ export default function MapCanvas({
       }, LONG_PRESS_MS);
     }
 
+    // MISURA: righello o area d'effetto, per tutti i ruoli
+    if (activeTool === 'measure' && e.button === 0) {
+      measureDragRef.current = { kind: measureKind, x1: worldPos.x, y1: worldPos.y, x2: worldPos.x, y2: worldPos.y };
+      return;
+    }
+
     // Pan con tasto destro o strumento PAN
     if (isRightClick || activeTool === 'pan') {
       setIsPanning(true);
@@ -799,6 +900,11 @@ export default function MapCanvas({
 
     const worldPos = screenToWorld(e.clientX, e.clientY);
 
+    if (measureDragRef.current) {
+      measureDragRef.current = { ...measureDragRef.current, x2: worldPos.x, y2: worldPos.y };
+      return;
+    }
+
     // 2. Gestione Trascinamento Token (Privato al controllore, visibile agli altri solo al rilascio)
     if (draggedTokenId) {
       const rawTargetX = worldPos.x - dragOffsetRef.current.x;
@@ -829,6 +935,16 @@ export default function MapCanvas({
   // MOUSE UP: Rilascio e Rilevamento Click Popover HP
   const handleMouseUp = (e?: React.MouseEvent) => {
     cancelPing();
+
+    // Fine misura: la mostro a tutti. Un clic senza trascinare toglie la mia misura.
+    const m = measureDragRef.current;
+    if (m) {
+      measureDragRef.current = null;
+      const dragged = Math.hypot(m.x2 - m.x1, m.y2 - m.y1) >= room.gridSize / 2;
+      socket?.emit('measure', dragged ? m : null);
+      return;
+    }
+
     // dopo un ping il rilascio non conta come clic sulla pedina
     if (e && activeTool === 'select' && !pingFiredRef.current) {
       const dx = e.clientX - mouseDownPosRef.current.x;

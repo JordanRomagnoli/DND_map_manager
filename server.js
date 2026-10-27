@@ -202,10 +202,15 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
     // Eventi e log su una pedina nascosta vanno solo al Master (null = tutta la stanza, per i log)
     const hiddenAudience = (roomId, ...tokens) => (tokens.some((t) => t?.hidden) ? masterRoom(roomId) : null);
 
+    // Colore con cui gli altri vedono ping e misure di questo socket: oro il Master, il colore della pedina i giocatori
+    const socketColor = (room) =>
+      socket.role === 'MASTER' ? '#fbbf24' : room.tokens.find((t) => t.id === socket.tokenId)?.color || '#3b82f6';
+
     // Un socket sta in una sola stanza: prima di entrare in un'altra esce dalla precedente
     // (anche dalla sua stanza Master), così smette di riceverne eventi e HP
     const leaveCurrentRoom = () => {
       if (!socket.roomId) return;
+      io.to(socket.roomId).emit('measured', { id: socket.id, measure: null }); // la sua misura sparisce
       socket.leave(socket.roomId);
       socket.leave(masterRoom(socket.roomId));
       scheduleRoomCleanupIfEmpty(socket.roomId);
@@ -800,12 +805,30 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       if (now - (socket.lastPingAt || 0) < 300) return; // niente raffiche
       socket.lastPingAt = now;
 
-      const token = room.tokens.find((t) => t.id === socket.tokenId);
-      io.to(socket.roomId).emit('map-pinged', {
-        x,
-        y,
-        name: socket.playerName,
-        color: socket.role === 'MASTER' ? '#fbbf24' : token?.color || '#3b82f6',
+      io.to(socket.roomId).emit('map-pinged', { x, y, name: socket.playerName, color: socketColor(room) });
+    });
+
+    // MISURE (tutti): righello o area d'effetto, visibile a tutta la stanza finché l'autore non la toglie
+    // (measure null). Il server non la salva: serve solo a mostrarla a tutti.
+    const MEASURE_KINDS = ['ruler', 'sphere', 'cone', 'line'];
+    socket.on('measure', (measure) => {
+      const room = rooms.get(socket.roomId);
+      if (!room) return;
+      const valid =
+        measure && MEASURE_KINDS.includes(measure.kind) && ['x1', 'y1', 'x2', 'y2'].every((k) => Number.isFinite(measure[k]));
+      if (measure !== null && !valid) return;
+
+      io.to(socket.roomId).emit('measured', {
+        id: socket.id,
+        measure: valid && {
+          kind: measure.kind,
+          x1: measure.x1,
+          y1: measure.y1,
+          x2: measure.x2,
+          y2: measure.y2,
+          name: socket.playerName,
+          color: socketColor(room),
+        },
       });
     });
 
@@ -1011,7 +1034,10 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
     socket.on('disconnect', () => {
       console.log(`❌ Disconnesso socket: ${socket.id}`);
       // a questo punto il socket è già uscito dalle sue stanze
-      if (socket.roomId) scheduleRoomCleanupIfEmpty(socket.roomId);
+      if (socket.roomId) {
+        io.to(socket.roomId).emit('measured', { id: socket.id, measure: null }); // la sua misura sparisce
+        scheduleRoomCleanupIfEmpty(socket.roomId);
+      }
     });
   });
 
