@@ -79,6 +79,7 @@ export default function MasterToolbar({
   const [npcColor, setNpcColor] = useState<string>('#ef4444');
   const [npcHp, setNpcHp] = useState<number>(12);
   const [npcAvatarUrl, setNpcAvatarUrl] = useState<string>('');
+  const [npcHidden, setNpcHidden] = useState<boolean>(false);
 
   // Form Mappa Sfondo State
   const [mapUrl, setMapUrl] = useState<string>('');
@@ -110,6 +111,7 @@ export default function MasterToolbar({
         hp: npcHp,
         maxHp: npcHp,
         size: room.gridSize * 0.8,
+        hidden: npcHidden,
       },
     });
 
@@ -571,6 +573,16 @@ export default function MasterToolbar({
                 </div>
               </div>
             </div>
+
+            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={npcHidden}
+                onChange={(e) => setNpcHidden(e.target.checked)}
+                className="accent-amber-400"
+              />
+              Nascosto ai giocatori (lo mostri tu quando entra in scena)
+            </label>
 
             {/* Immagine Pedina NPC (Opzionale) */}
             <div>

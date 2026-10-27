@@ -635,3 +635,32 @@ test('nebbia di guerra: solo il Master la modifica, arriva a tutti e resta nella
   await wait(100);
   assert.deepEqual(seen.at(-1).areas, [], 'ricopri tutto');
 });
+
+test("un NPC nascosto non arriva ai giocatori finché il Master non lo mostra", async () => {
+  const dm = client();
+  await ack(dm, 'create-room', { roomId: 'agguato', password: 'pw' });
+  const { token: orc } = await ack(dm, 'add-token', { tokenData: { name: 'Orco', hidden: true } });
+  const pl = client();
+  const join = await ack(pl, 'join-room', { roomId: 'agguato', password: 'pw', playerName: 'A' });
+  const heroId = join.assignedTokenId;
+  assert.ok(!join.room.tokens.some((t) => t.id === orc.id), 'non è nella stanza del giocatore');
+
+  const seen = [];
+  pl.onAny((event, data) => seen.push([event, JSON.stringify(data)]));
+  dm.emit('move-token-end', { tokenId: orc.id, endX: 125, endY: 125 });
+  dm.emit('set-initiative', { entries: [{ tokenId: orc.id, value: 20 }, { tokenId: heroId, value: 10 }] });
+  dm.emit('toggle-engagement', { tokenId: orc.id, targetId: heroId });
+  await wait(200);
+  assert.ok(!seen.some(([, data]) => data.includes(orc.id) || data.includes('Orco')), "nessuna traccia dell'Orco");
+  assert.ok(seen.some(([event]) => event === 'initiative-updated'), 'il combattimento arriva comunque');
+
+  let shown = null;
+  pl.on('token-added', (t) => (shown = t));
+  pl.emit('set-token-hidden', { tokenId: orc.id, hidden: false }); // un giocatore non può
+  await wait(100);
+  assert.equal(shown, null);
+  dm.emit('set-token-hidden', { tokenId: orc.id, hidden: false });
+  await wait(100);
+  assert.equal(shown?.id, orc.id, 'mostrato dal Master, compare');
+  assert.equal(shown.hp, undefined, 'senza HP');
+});

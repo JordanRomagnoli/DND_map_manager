@@ -261,6 +261,12 @@ export default function GameRoomPage() {
       });
     });
 
+    newSocket.on('token-hidden-updated', ({ tokenId, hidden }) => {
+      setRoom((prev) =>
+        prev ? { ...prev, tokens: prev.tokens.map((t) => (t.id === tokenId ? { ...t, hidden } : t)) } : null
+      );
+    });
+
     newSocket.on('token-removed', ({ tokenId }) => {
       setRoom((prev) => {
         if (!prev) return null;

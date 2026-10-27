@@ -12,6 +12,7 @@ export interface Token {
   size: number; // Token diameter in grid units or pixels
   hp?: number;
   maxHp?: number;
+  hidden?: boolean; // NPC nascosto dal Master: il server non lo invia ai giocatori
 }
 
 export type ShapeType = 'freehand' | 'rectangle' | 'circle';

@@ -11,9 +11,21 @@ const publicRoom = ({ password, masterKey, masterPassword, playerKeys, ...room }
 // Gli HP li vedono solo il Master e il proprietario della pedina: il server non li invia agli altri
 const masterRoom = (roomId) => `${roomId}:master`;
 const hideHp = (token) => ({ ...token, hp: undefined, maxHp: undefined });
+// Gli NPC nascosti dal Master non arrivano ai giocatori: né la pedina, né i suoi turni, ingaggi o log
+const isHiddenToken = (room, tokenId) => Boolean(room.tokens.find((t) => t.id === tokenId)?.hidden);
+// Se è il turno di un NPC nascosto i giocatori vedono activeTokenId vuoto: non è il turno di nessuno di loro
+const playerInitiative = (room) =>
+  room.initiative && {
+    ...room.initiative,
+    entries: room.initiative.entries.filter((e) => !isHiddenToken(room, e.tokenId)),
+    activeTokenId: isHiddenToken(room, room.initiative.activeTokenId) ? '' : room.initiative.activeTokenId,
+  };
+const playerEngagements = (room) => (room.engagements || []).filter((pair) => !pair.some((id) => isHiddenToken(room, id)));
 const playerView = (room, ownTokenId) => ({
   ...publicRoom(room),
-  tokens: room.tokens.map((t) => (t.id === ownTokenId ? t : hideHp(t))),
+  tokens: room.tokens.filter((t) => !t.hidden).map((t) => (t.id === ownTokenId ? t : hideHp(t))),
+  initiative: playerInitiative(room),
+  engagements: playerEngagements(room),
   logs: (room.logs || []).filter((l) => !l.private),
 });
 
@@ -141,6 +153,18 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
 
       io.to(audience || roomId).emit('action-logged', logRecord);
     };
+
+    // Iniziativa e ingaggi: il Master li riceve completi, i giocatori senza gli NPC nascosti
+    const emitInitiative = (roomId, room) => {
+      io.to(masterRoom(roomId)).emit('initiative-updated', room.initiative);
+      io.to(roomId).except(masterRoom(roomId)).emit('initiative-updated', playerInitiative(room));
+    };
+    const emitEngagements = (roomId, room) => {
+      io.to(masterRoom(roomId)).emit('engagements-updated', room.engagements);
+      io.to(roomId).except(masterRoom(roomId)).emit('engagements-updated', playerEngagements(room));
+    };
+    // Eventi e log su una pedina nascosta vanno solo al Master (null = tutta la stanza, per i log)
+    const hiddenAudience = (roomId, ...tokens) => (tokens.some((t) => t?.hidden) ? masterRoom(roomId) : null);
 
     // Un socket sta in una sola stanza: prima di entrare in un'altra esce dalla precedente
     // (anche dalla sua stanza Master), così smette di riceverne eventi e HP
@@ -382,12 +406,12 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
 
       // Fuori turno (piazzamento, riposizionamento): tutti vedono solo la posizione finale, nessun log
       if (!isTurnMove) {
-        io.to(roomId).emit('token-moved', { tokenId, x: token.x, y: token.y });
+        io.to(hiddenAudience(roomId, token) || roomId).emit('token-moved', { tokenId, x: token.x, y: token.y });
         return;
       }
 
       // Broadcast dell'animazione fluida di scorrimento a TUTTI i client connessi
-      io.to(roomId).emit('token-moved-animated', {
+      io.to(hiddenAudience(roomId, token) || roomId).emit('token-moved-animated', {
         tokenId,
         startX: actualStartX,
         startY: actualStartY,
@@ -416,7 +440,8 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
         socket.role,
         'TOKEN_MOVE',
         `${socket.playerName || token.name} ha mosso il token "${token.name}" di ${metersText} (${stepsText}).`,
-        { tokenId, startX: actualStartX, startY: actualStartY, endX: token.x, endY: token.y, gridSteps, metersMoved }
+        { tokenId, startX: actualStartX, startY: actualStartY, endX: token.x, endY: token.y, gridSteps, metersMoved },
+        hiddenAudience(roomId, token)
       );
     });
 
@@ -479,7 +504,7 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       token.avatarUrl = avatarUrl || null;
 
       // Broadcast a tutti i client nella stanza
-      io.to(roomId).emit('token-avatar-updated', {
+      io.to(hiddenAudience(roomId, token) || roomId).emit('token-avatar-updated', {
         tokenId,
         avatarUrl: token.avatarUrl,
       });
@@ -491,7 +516,9 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
         socket.playerName || (socket.role === 'MASTER' ? 'Master' : token.name),
         socket.role,
         'AVATAR_UPDATE',
-        `${socket.playerName || token.name} ha aggiornato l'immagine della pedina "${token.name}".`
+        `${socket.playerName || token.name} ha aggiornato l'immagine della pedina "${token.name}".`,
+        {},
+        hiddenAudience(roomId, token)
       );
     });
 
@@ -518,11 +545,12 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
         size: tokenData.size || room.gridSize * 0.8,
         hp: tokenData.hp ?? 10,
         maxHp: tokenData.maxHp ?? 10,
+        hidden: tokenData.type !== 'player' && Boolean(tokenData.hidden), // NPC preparato in segreto
       };
 
       room.tokens.push(newToken);
       io.to(masterRoom(roomId)).emit('token-added', newToken);
-      io.to(roomId).except(masterRoom(roomId)).emit('token-added', hideHp(newToken));
+      if (!newToken.hidden) io.to(roomId).except(masterRoom(roomId)).emit('token-added', hideHp(newToken));
       callback?.({ success: true, token: newToken }); // nessun log: la preparazione della scena non fa parte della giocata
     });
 
@@ -542,7 +570,7 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
 
       if (room.engagements?.some((pair) => pair.includes(tokenId))) {
         room.engagements = room.engagements.filter((pair) => !pair.includes(tokenId));
-        io.to(roomId).emit('engagements-updated', room.engagements);
+        emitEngagements(roomId, room);
       }
       callback?.({ success: true });
 
@@ -557,7 +585,7 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
           room.initiative.entries = remaining;
           if (activeTokenId === tokenId) room.initiative.activeTokenId = remaining[index % remaining.length].tokenId;
         }
-        io.to(roomId).emit('initiative-updated', room.initiative);
+        emitInitiative(roomId, room);
       }
 
       createAndBroadcastLog(
@@ -565,7 +593,9 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
         'Master',
         'MASTER',
         'TOKEN_REMOVE',
-        `Il Master ha rimosso il token "${tokenName}".`
+        `Il Master ha rimosso il token "${tokenName}".`,
+        {},
+        hiddenAudience(roomId, targetToken)
       );
     });
 
@@ -593,12 +623,14 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
         }
       }
 
-      io.to(roomId).emit('initiative-updated', room.initiative);
+      emitInitiative(roomId, room);
       callback?.({ success: true });
 
       if (starting) {
         const first = room.tokens.find((t) => t.id === room.initiative.activeTokenId);
-        createAndBroadcastLog(roomId, 'Master', 'MASTER', 'TURN', `Inizia il combattimento. Round 1: turno di "${first.name}".`);
+        // i giocatori sanno che il combattimento inizia, ma non chi agisce se è nascosto
+        const turnOf = first.hidden ? '' : ` Round 1: turno di "${first.name}".`;
+        createAndBroadcastLog(roomId, 'Master', 'MASTER', 'TURN', `Inizia il combattimento.${turnOf}`);
       }
     });
 
@@ -613,10 +645,18 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       if (next >= entries.length) room.initiative.round++;
       room.initiative.activeTokenId = entries[next % entries.length].tokenId;
 
-      io.to(roomId).emit('initiative-updated', room.initiative);
+      emitInitiative(roomId, room);
 
       const active = room.tokens.find((t) => t.id === room.initiative.activeTokenId);
-      createAndBroadcastLog(roomId, 'Master', 'MASTER', 'TURN', `Round ${room.initiative.round}: turno di "${active.name}".`);
+      createAndBroadcastLog(
+        roomId,
+        'Master',
+        'MASTER',
+        'TURN',
+        `Round ${room.initiative.round}: turno di "${active.name}".`,
+        {},
+        hiddenAudience(roomId, active)
+      );
     });
 
     // FINE COMBATTIMENTO (Master only): da qui i movimenti tornano liberi e non registrati
@@ -650,7 +690,7 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       room.engagements = exists
         ? engagements.filter(([a, b]) => !(a === pair[0] && b === pair[1]))
         : [...engagements, pair];
-      io.to(roomId).emit('engagements-updated', room.engagements);
+      emitEngagements(roomId, room);
 
       createAndBroadcastLog(
         roomId,
@@ -659,8 +699,29 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
         'ENGAGEMENT',
         exists
           ? `"${token.name}" e "${target.name}" non sono più in combattimento.`
-          : `"${token.name}" ingaggia "${target.name}".`
+          : `"${token.name}" ingaggia "${target.name}".`,
+        {},
+        hiddenAudience(roomId, token, target)
       );
+    });
+
+    // NASCONDI / MOSTRA NPC (Master only): per i giocatori la pedina sparisce o compare,
+    // insieme ai suoi turni e ingaggi
+    socket.on('set-token-hidden', ({ tokenId, hidden }) => {
+      const roomId = socket.roomId;
+      const room = rooms.get(roomId);
+      if (!room || socket.role !== 'MASTER') return;
+
+      const token = room.tokens.find((t) => t.id === tokenId && t.type === 'npc');
+      if (!token || Boolean(token.hidden) === Boolean(hidden)) return;
+      token.hidden = Boolean(hidden);
+
+      io.to(masterRoom(roomId)).emit('token-hidden-updated', { tokenId, hidden: token.hidden });
+      const players = io.to(roomId).except(masterRoom(roomId));
+      if (token.hidden) players.emit('token-removed', { tokenId });
+      else players.emit('token-added', hideHp(token));
+      emitInitiative(roomId, room);
+      emitEngagements(roomId, room);
     });
 
     // TRATTI DI DISEGNO (Master only)

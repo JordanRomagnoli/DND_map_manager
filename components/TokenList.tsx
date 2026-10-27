@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Users, Trash2, ChevronRight, ChevronLeft, Heart, Shield, Skull, Camera, Upload } from 'lucide-react';
+import { Users, Trash2, ChevronRight, ChevronLeft, Heart, Shield, Skull, Camera, Upload, Eye, EyeOff } from 'lucide-react';
 import { Token, UserRole } from '@/lib/types';
 import { Socket } from 'socket.io-client';
 import { sendTokenAvatar } from '@/lib/utils';
@@ -180,6 +180,18 @@ export default function TokenList({ tokens, role, roomId, socket, myTokenId }: T
                               <Camera size={15} />
                             </label>
                           </>
+                        )}
+
+                        {role === 'MASTER' && isNpc && (
+                          <button
+                            onClick={() => socket?.emit('set-token-hidden', { tokenId: token.id, hidden: !token.hidden })}
+                            className={`transition-colors p-1 rounded hover:bg-slate-800 ${
+                              token.hidden ? 'text-amber-400 hover:text-amber-300' : 'text-slate-500 hover:text-slate-200'
+                            }`}
+                            title={token.hidden ? 'Nascosto ai giocatori: clic per mostrarlo' : 'Nascondi ai giocatori'}
+                          >
+                            {token.hidden ? <EyeOff size={15} /> : <Eye size={15} />}
+                          </button>
                         )}
 
                         {role === 'MASTER' && (

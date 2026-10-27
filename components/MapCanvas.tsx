@@ -453,6 +453,7 @@ export default function MapCanvas({
 
       ctx.save();
       ctx.translate(renderX, renderY);
+      if (token.hidden) ctx.globalAlpha = 0.45; // il Master vede in trasparenza gli NPC nascosti ai giocatori
 
       // Pedina di turno in combattimento: riquadro dorato attorno al suo quadretto
       if (room.initiative?.activeTokenId === token.id) {
