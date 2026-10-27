@@ -176,32 +176,6 @@ body {
 }
 
 /* Floating Toolbar */
-.toolbar-floating {
-  position: absolute;
-  bottom: 20px; /* in basso: in alto coprirebbe i pulsanti dell'header (registro, iniziativa) */
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-radius: 30px;
-}
-
-.toolbar-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.toolbar-divider {
-  width: 1px;
-  height: 24px;
-  background: rgba(255, 255, 255, 0.15);
-  margin: 0 6px;
-}
-
 /* Sidebar Drawer */
 .sidebar-panel {
   position: absolute;

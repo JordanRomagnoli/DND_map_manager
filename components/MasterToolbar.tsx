@@ -14,18 +14,17 @@ import {
   Sparkles,
   Square,
   Circle,
-  ChevronDown,
   Ruler,
-  Camera,
   CloudFog,
   ScrollText,
+  Sun,
   Eye,
   EyeOff,
 } from 'lucide-react';
 
 import { RoomState } from '@/lib/types';
 import { Socket } from 'socket.io-client';
-import { resizeImageFile } from '@/lib/utils';
+import { cn, resizeImageFile } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -40,12 +39,53 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+
+const BRUSH_COLORS = ['#1e293b', '#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#ffffff'];
+const BRUSH_WIDTHS = [
+  { width: 2, label: 'Sottile' },
+  { width: 5, label: 'Medio' },
+  { width: 10, label: 'Spesso' },
+  { width: 20, label: 'Muro' },
+];
+
+// Pulsante della barra: icona con l'etichetta sotto, leggibile anche da telefono dove i tooltip non ci sono.
+// active undefined = pulsante semplice (non interruttore). forwardRef: serve come PopoverTrigger asChild.
+const ToolButton = React.forwardRef<
+  HTMLButtonElement,
+  React.ButtonHTMLAttributes<HTMLButtonElement> & { icon: React.ReactNode; label: string; active?: boolean; danger?: boolean }
+>(({ icon, label, active, danger = false, className, ...props }, ref) => (
+  <button
+    ref={ref}
+    type="button"
+    aria-pressed={active}
+    className={cn(
+      'flex flex-col items-center justify-center gap-1 min-w-[58px] h-[52px] px-2 rounded-xl border shrink-0 transition-colors',
+      active
+        ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-md shadow-amber-500/30'
+        : danger
+          ? 'text-red-400 border-transparent hover:bg-red-500/15'
+          : 'text-slate-300 border-transparent hover:bg-slate-800 hover:text-amber-300',
+      className
+    )}
+    {...props}
+  >
+    {icon}
+    <span className="text-[10px] font-semibold leading-none whitespace-nowrap">{label}</span>
+  </button>
+));
+ToolButton.displayName = 'ToolButton';
+
+// Gruppo di pulsanti col suo nome sopra (nascosto su telefono per risparmiare spazio)
+function ToolGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col items-center gap-0.5 shrink-0">
+      <span className="hidden sm:block text-[9px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
+      <div className="flex items-center gap-1">{children}</div>
+    </div>
+  );
+}
+
+const Divider = () => <div className="w-px self-stretch my-1 bg-white/10 shrink-0" />;
 
 interface MasterToolbarProps {
   room: RoomState;
@@ -207,353 +247,195 @@ export default function MasterToolbar({
   const fog = room.fog ?? { enabled: false, areas: [] };
   const isFogTool = activeTool === 'fog-reveal' || activeTool === 'fog-hide';
 
-  // Accendendo la nebbia si passa subito allo strumento per rivelare; spegnendola si torna a selezionare
-  const handleToggleFog = () => {
-    socket?.emit('update-fog', { enabled: !fog.enabled });
-    setActiveTool(fog.enabled ? 'select' : 'fog-reveal');
-  };
-
   const handleCoverAll = () => {
     if (confirm('Ricoprire di nebbia tutta la mappa?')) socket?.emit('update-fog', { reset: true });
   };
 
-  const fogItemClass = (on: boolean) =>
-    `justify-start gap-2 text-xs h-8 ${
-      on ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30' : 'text-slate-200 hover:bg-slate-800'
-    }`;
+  const isDrawTool = activeTool === 'brush' || activeTool === 'eraser' || activeTool === 'shape';
+
+  // Nebbia: il primo clic la accende e passa a "Rivela"; se è già accesa riprende a rivelare
+  const handleFogMode = () => {
+    if (!fog.enabled) socket?.emit('update-fog', { enabled: true });
+    setActiveTool('fog-reveal');
+  };
+
+  const handleFogOff = () => {
+    socket?.emit('update-fog', { enabled: false });
+    setActiveTool('select');
+  };
 
   return (
-    <TooltipProvider>
-      {/* BARRA DEGLI STRUMENTI DEL MASTER (ShadCN UI + Tooltips) */}
-      <div className="toolbar-floating glass-panel border border-amber-500/30 shadow-2xl backdrop-blur-md">
-        <div className="toolbar-group">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="icon"
-                className={activeTool === 'select' ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-amber-500/30' : ''}
-                onClick={() => setActiveTool('select')}
-              >
-                <MousePointer size={20} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Seleziona e Muovi Token</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="icon"
-                className={activeTool === 'pan' ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-amber-500/30' : ''}
-                onClick={() => setActiveTool('pan')}
-              >
-                <Hand size={20} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Sposta Vista Mappa (Pan)</TooltipContent>
-          </Tooltip>
-        </div>
-
-        <div className="toolbar-divider" />
-
-        {/* Strumenti di Disegno */}
-        <div className="toolbar-group">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="icon"
-                className={activeTool === 'brush' ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-amber-500/30' : ''}
-                onClick={() => setActiveTool('brush')}
-              >
-                <Pencil size={20} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Disegna Mappa a Mano Libera</TooltipContent>
-          </Tooltip>
-
-          {/* Dropdown Forme Geometriche (Rettangolo e Cerchio) */}
-          <Popover>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="icon"
-                    className={`gap-1 px-2.5 w-auto ${
-                      activeTool === 'shape'
-                        ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-amber-500/30'
-                        : ''
-                    }`}
-                  >
-                    {activeShape === 'rectangle' ? (
-                      <Square size={19} />
-                    ) : (
-                      <Circle size={19} />
-                    )}
-                    <ChevronDown size={13} className="opacity-70" />
-                  </Button>
-                </PopoverTrigger>
-              </TooltipTrigger>
-              <TooltipContent>Disegna Forme Geometriche</TooltipContent>
-            </Tooltip>
-            <PopoverContent className="w-44 p-1.5 bg-slate-900/95 border-amber-500/30 backdrop-blur-xl shadow-2xl flex flex-col gap-1">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">
-                Forme Geometriche
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`justify-start gap-2 text-xs h-8 ${
-                  activeTool === 'shape' && activeShape === 'rectangle'
-                    ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30'
-                    : 'text-slate-200 hover:bg-slate-800'
-                }`}
-                onClick={() => {
-                  setActiveShape('rectangle');
-                  setActiveTool('shape');
-                }}
-              >
-                <Square size={16} className="text-amber-400" />
-                <span>Rettangolo</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`justify-start gap-2 text-xs h-8 ${
-                  activeTool === 'shape' && activeShape === 'circle'
-                    ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30'
-                    : 'text-slate-200 hover:bg-slate-800'
-                }`}
-                onClick={() => {
-                  setActiveShape('circle');
-                  setActiveTool('shape');
-                }}
-              >
-                <Circle size={16} className="text-amber-400" />
-                <span>Cerchio</span>
-              </Button>
-            </PopoverContent>
-          </Popover>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="icon"
-                className={activeTool === 'eraser' ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-amber-500/30' : ''}
-                onClick={() => setActiveTool('eraser')}
-              >
-                <Eraser size={20} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Gomma da Cancellare</TooltipContent>
-          </Tooltip>
-
-          {/* Selettore Colore */}
-          <div className="relative flex items-center justify-center p-1 rounded-xl bg-slate-900/60 border border-white/10 hover:border-amber-400 transition-colors">
-            <input
-              type="color"
-              value={brushColor}
-              onChange={(e) => setBrushColor(e.target.value)}
-              className="w-7 h-7 rounded cursor-pointer border-none bg-transparent"
-              title="Colore Pennello"
+    <>
+      {/* BARRA DEL MASTER: in basso al centro. Sopra compare la sottobarra con le opzioni di Disegno o Nebbia */}
+      <div className="absolute bottom-20 sm:bottom-5 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center gap-2 max-w-[calc(100vw-1rem)]">
+        {isDrawTool && (
+          <div className="glass-panel flex items-center gap-1.5 px-2 py-1.5 max-w-full overflow-x-auto">
+            <ToolButton icon={<Pencil size={18} />} label="Pennello" active={activeTool === 'brush'} onClick={() => setActiveTool('brush')} />
+            <ToolButton
+              icon={<Square size={18} />}
+              label="Rettangolo"
+              active={activeTool === 'shape' && activeShape === 'rectangle'}
+              onClick={() => {
+                setActiveShape('rectangle');
+                setActiveTool('shape');
+              }}
             />
+            <ToolButton
+              icon={<Circle size={18} />}
+              label="Cerchio"
+              active={activeTool === 'shape' && activeShape === 'circle'}
+              onClick={() => {
+                setActiveShape('circle');
+                setActiveTool('shape');
+              }}
+            />
+            <ToolButton icon={<Eraser size={18} />} label="Gomma" active={activeTool === 'eraser'} onClick={() => setActiveTool('eraser')} />
+
+            <Divider />
+
+            {/* Colore: tinte rapide più un selettore libero */}
+            <div className="flex items-center gap-1 shrink-0" role="group" aria-label="Colore">
+              {BRUSH_COLORS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  aria-label={`Colore ${color}`}
+                  aria-pressed={brushColor === color}
+                  onClick={() => setBrushColor(color)}
+                  className={`w-6 h-6 rounded-full border-2 transition-transform ${
+                    brushColor === color ? 'border-amber-300 scale-110' : 'border-white/20 hover:scale-110'
+                  }`}
+                  style={{ backgroundColor: color }}
+                />
+              ))}
+              <input
+                type="color"
+                value={brushColor}
+                onChange={(e) => setBrushColor(e.target.value)}
+                className="w-7 h-7 rounded cursor-pointer border-none bg-transparent"
+                title="Altro colore"
+              />
+            </div>
+
+            <Divider />
+
+            {/* Spessore del tratto */}
+            <div className="flex items-center rounded-lg bg-slate-950/60 border border-white/10 p-0.5 shrink-0" role="group" aria-label="Spessore">
+              {BRUSH_WIDTHS.map(({ width, label }) => (
+                <button
+                  key={width}
+                  type="button"
+                  aria-pressed={brushWidth === width}
+                  onClick={() => setBrushWidth(width)}
+                  className={`h-8 px-2.5 rounded-md text-[11px] font-semibold transition-colors ${
+                    brushWidth === width ? 'bg-amber-400 text-slate-950' : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <Divider />
+
+            <ToolButton icon={<Trash2 size={18} />} label="Cancella tutto" danger onClick={handleClearDrawings} />
           </div>
+        )}
 
-          {/* Spessore Tratto */}
-          <select
-            value={brushWidth}
-            onChange={(e) => setBrushWidth(Number(e.target.value))}
-            className="h-11 px-2.5 rounded-xl bg-slate-900/80 border border-slate-700/60 text-xs font-semibold text-slate-200 cursor-pointer outline-none hover:border-amber-400"
-            title="Spessore Pennello"
-          >
-            <option value={2}>Sottile</option>
-            <option value={5}>Medio</option>
-            <option value={10}>Spesso</option>
-            <option value={20}>Muro</option>
-          </select>
+        {isFogTool && (
+          <div className="glass-panel flex items-center gap-1.5 px-2 py-1.5 max-w-full overflow-x-auto">
+            <ToolButton icon={<Eye size={18} />} label="Rivela" active={activeTool === 'fog-reveal'} onClick={() => setActiveTool('fog-reveal')} />
+            <ToolButton icon={<EyeOff size={18} />} label="Ricopri" active={activeTool === 'fog-hide'} onClick={() => setActiveTool('fog-hide')} />
+            <span className="hidden md:block max-w-[220px] px-2 text-[11px] leading-snug text-slate-400">
+              Trascina sulla mappa per scegliere i quadretti. Gli NPC sotto la nebbia sono invisibili ai giocatori.
+            </span>
+            <Divider />
+            <ToolButton icon={<CloudFog size={18} />} label="Ricopri tutto" onClick={handleCoverAll} />
+            <ToolButton icon={<Sun size={18} />} label="Spegni nebbia" danger onClick={handleFogOff} />
+          </div>
+        )}
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="icon"
-                className="hover:bg-red-500/20 hover:border-red-500/40 text-red-400"
-                onClick={handleClearDrawings}
-              >
-                <Trash2 size={20} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Cancella tutti i disegni</TooltipContent>
-          </Tooltip>
+        <div className="glass-panel flex items-end gap-1 px-2 py-1.5 max-w-full overflow-x-auto">
+          <ToolGroup label="Vista">
+            <ToolButton icon={<MousePointer size={20} />} label="Seleziona" active={activeTool === 'select'} onClick={() => setActiveTool('select')} />
+            <ToolButton icon={<Hand size={20} />} label="Sposta" active={activeTool === 'pan'} onClick={() => setActiveTool('pan')} />
+          </ToolGroup>
+
+          <Divider />
+
+          <ToolGroup label="Strumenti">
+            <ToolButton
+              icon={<Pencil size={20} />}
+              label="Disegna"
+              active={isDrawTool}
+              onClick={() => !isDrawTool && setActiveTool('brush')}
+            />
+            <ToolButton
+              icon={<CloudFog size={20} />}
+              label={fog.enabled ? 'Nebbia ●' : 'Nebbia'}
+              active={isFogTool}
+              onClick={handleFogMode}
+              title={fog.enabled ? 'La nebbia è attiva: clic per rivelare o ricoprire' : 'Avvolgi la mappa nella nebbia di guerra'}
+            />
+          </ToolGroup>
+
+          <Divider />
+
+          <ToolGroup label="Scena">
+            <ToolButton icon={<ImageIcon size={20} />} label="Mappa" onClick={() => setShowMapModal(true)} title="Carica la mappa di sfondo" />
+            <ToolButton icon={<PlusCircle size={20} />} label="NPC" onClick={() => setShowNpcModal(true)} title="Evoca un nuovo NPC o mostro" />
+            <ToolButton
+              icon={<ScrollText size={20} />}
+              label="Handout"
+              onClick={() => handoutInputRef.current?.click()}
+              title="Mostra a tutti un'immagine: lettera, ritratto, oggetto"
+            />
+            <input ref={handoutInputRef} type="file" accept="image/*" onChange={handleHandoutUpload} className="hidden" />
+          </ToolGroup>
+
+          <Divider />
+
+          <ToolGroup label="Griglia">
+            <Popover>
+              <PopoverTrigger asChild>
+                <ToolButton icon={<Grid size={20} />} label={`${room.gridScale || 1} m`} title="Griglia e scala" />
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-2 bg-slate-900/95 border-amber-500/30 backdrop-blur-xl shadow-2xl flex flex-col gap-2 text-xs">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={`justify-start gap-2 text-xs h-8 ${
+                    room.gridVisible ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30' : 'text-slate-200 hover:bg-slate-800'
+                  }`}
+                  onClick={handleToggleGrid}
+                >
+                  <Grid size={16} className="text-amber-400" />
+                  <span>{room.gridVisible ? 'Griglia visibile' : 'Griglia nascosta'}</span>
+                </Button>
+                <div className="flex items-center gap-1.5 px-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  <Ruler size={12} className="text-amber-400" /> Metri per quadretto
+                </div>
+                <div className="grid grid-cols-3 gap-1">
+                  {[0.5, 1, 1.5, 2, 3, 5].map((scale) => (
+                    <Button
+                      key={scale}
+                      variant="ghost"
+                      size="sm"
+                      className={`h-7 text-xs ${
+                        (room.gridScale || 1) === scale
+                          ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40'
+                          : 'text-slate-300 hover:bg-slate-800'
+                      }`}
+                      onClick={() => socket?.emit('update-grid', { roomId: room.id, gridScale: scale })}
+                    >
+                      {scale}m
+                    </Button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </ToolGroup>
         </div>
-
-        <div className="toolbar-divider" />
-
-        {/* Gestione Mappa & NPC */}
-        <div className="toolbar-group">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="icon"
-                className="hover:border-amber-400 hover:text-amber-400"
-                onClick={() => setShowMapModal(true)}
-              >
-                <ImageIcon size={20} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Carica Mappa di Sfondo (JPG/PNG)</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="icon"
-                className="hover:border-amber-400 text-amber-400"
-                onClick={() => setShowNpcModal(true)}
-              >
-                <PlusCircle size={20} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Evoca Nuovo NPC / Mostro</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="icon"
-                className="hover:border-amber-400 hover:text-amber-400"
-                onClick={() => handoutInputRef.current?.click()}
-              >
-                <ScrollText size={20} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Mostra un Handout a tutti (lettera, ritratto, oggetto)</TooltipContent>
-          </Tooltip>
-          <input ref={handoutInputRef} type="file" accept="image/*" onChange={handleHandoutUpload} className="hidden" />
-        </div>
-
-        <div className="toolbar-divider" />
-
-        {/* Nebbia di guerra */}
-        <div className="toolbar-group">
-          <Popover>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="icon"
-                    className={`gap-1 px-2.5 w-auto ${
-                      isFogTool ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-amber-500/30' : fog.enabled ? 'text-amber-400' : ''
-                    }`}
-                  >
-                    <CloudFog size={19} />
-                    <ChevronDown size={13} className="opacity-70" />
-                  </Button>
-                </PopoverTrigger>
-              </TooltipTrigger>
-              <TooltipContent>Nebbia di Guerra</TooltipContent>
-            </Tooltip>
-            <PopoverContent className="w-56 p-1.5 bg-slate-900/95 border-amber-500/30 backdrop-blur-xl shadow-2xl flex flex-col gap-1">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">
-                Nebbia di Guerra
-              </div>
-              <Button variant="ghost" size="sm" className={fogItemClass(fog.enabled)} onClick={handleToggleFog}>
-                <CloudFog size={16} className="text-amber-400" />
-                <span>{fog.enabled ? 'Attiva (clic per spegnere)' : 'Spenta (clic per attivare)'}</span>
-              </Button>
-              {fog.enabled && (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={fogItemClass(activeTool === 'fog-reveal')}
-                    onClick={() => setActiveTool('fog-reveal')}
-                  >
-                    <Eye size={16} className="text-amber-400" />
-                    <span>Rivela area</span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={fogItemClass(activeTool === 'fog-hide')}
-                    onClick={() => setActiveTool('fog-hide')}
-                  >
-                    <EyeOff size={16} className="text-amber-400" />
-                    <span>Ricopri area</span>
-                  </Button>
-                  <Button variant="ghost" size="sm" className={fogItemClass(false)} onClick={handleCoverAll}>
-                    <Trash2 size={16} className="text-red-400" />
-                    <span>Ricopri tutta la mappa</span>
-                  </Button>
-                  <p className="px-2 py-1 text-[10px] text-slate-400 leading-snug">
-                    Trascina sulla mappa per scegliere i quadretti. Gli NPC sotto la nebbia sono invisibili ai giocatori.
-                  </p>
-                </>
-              )}
-            </PopoverContent>
-          </Popover>
-        </div>
-
-        <div className="toolbar-divider" />
-
-        {/* Grid & Snap & Scale Controls */}
-        <div className="toolbar-group">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="icon"
-                className={room.gridVisible ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-amber-500/30' : ''}
-                onClick={handleToggleGrid}
-              >
-                <Grid size={20} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Mostra/Nascondi Griglia</TooltipContent>
-          </Tooltip>
-
-          {/* Impostazione Metri per Quadrato (Scala Griglia) */}
-          <Popover>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <PopoverTrigger asChild>
-                  <Button variant="icon" className="gap-1 px-2 w-auto">
-                    <Ruler size={19} className="text-amber-400" />
-                    <span className="text-[11px] font-bold text-slate-200">{room.gridScale || 1}m</span>
-                  </Button>
-                </PopoverTrigger>
-              </TooltipTrigger>
-              <TooltipContent>Imposta Scala Griglia (Metri per quadrato)</TooltipContent>
-            </Tooltip>
-            <PopoverContent className="w-52 p-2 bg-slate-900/95 border-amber-500/30 backdrop-blur-xl shadow-2xl flex flex-col gap-2 text-xs">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Scala Griglia (Metri / Quadrato)
-              </div>
-              <div className="grid grid-cols-3 gap-1">
-                {[0.5, 1, 1.5, 2, 3, 5].map((scale) => (
-                  <Button
-                    key={scale}
-                    variant="ghost"
-                    size="sm"
-                    className={`h-7 text-xs ${
-                      (room.gridScale || 1) === scale
-                        ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40'
-                        : 'text-slate-300 hover:bg-slate-800'
-                    }`}
-                    onClick={() => {
-                      if (socket) {
-                        socket.emit('update-grid', {
-                          roomId: room.id,
-                          gridScale: scale,
-                        });
-                      }
-                    }}
-                  >
-                    {scale}m
-                  </Button>
-                ))}
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
-
       </div>
 
       {/* MODALE AGGIUNTA NPC SHADCN DIALOG */}
@@ -741,7 +623,7 @@ export default function MasterToolbar({
           </Button>
         </DialogContent>
       </Dialog>
-    </TooltipProvider>
+    </>
   );
 }
 
