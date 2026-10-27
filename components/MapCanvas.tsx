@@ -59,6 +59,9 @@ function fogAreaFrom(points: { x: number; y: number }[], gridSize: number, hide:
   };
 }
 
+const PING_MS = 2000;
+const LONG_PRESS_MS = 500;
+
 interface MapCanvasProps {
   room: RoomState;
   role: UserRole;
@@ -158,6 +161,27 @@ export default function MapCanvas({
   }, [socket]);
 
 
+
+  // Ping ricevuti, disegnati finché non scadono
+  const pingsRef = useRef<{ x: number; y: number; color: string; name: string; start: number }[]>([]);
+  const pingTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const pingFiredRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handlePing = (ping: { x: number; y: number; color: string; name: string }) => {
+      pingsRef.current.push({ ...ping, start: Date.now() });
+    };
+    socket.on('map-pinged', handlePing);
+    return () => {
+      socket.off('map-pinged', handlePing);
+    };
+  }, [socket]);
+
+  const cancelPing = () => {
+    clearTimeout(pingTimerRef.current);
+    pingTimerRef.current = undefined;
+  };
 
   // Stato Popover HP Token
   const [hpModalToken, setHpModalToken] = useState<Token | null>(null);
@@ -569,6 +593,33 @@ export default function MapCanvas({
 
       ctx.restore();
     });
+
+    // 5. PING: onde che si allargano attorno al punto indicato e svaniscono, col nome di chi l'ha fatto
+    const now = Date.now();
+    pingsRef.current = pingsRef.current.filter((p) => now - p.start < PING_MS);
+    pingsRef.current.forEach((p) => {
+      const t = (now - p.start) / PING_MS;
+      ctx.save();
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = 3 / zoom;
+      for (let i = 0; i < 3; i++) {
+        const phase = (t * 2 + i / 3) % 1;
+        ctx.globalAlpha = (1 - phase) * (1 - t);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, room.gridSize * (0.2 + phase * 1.3), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1 - t;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, room.gridSize * 0.12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.font = `bold ${Math.max(11, 12 / zoom)}px Outfit, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(p.name, p.x, p.y - room.gridSize * 0.6);
+      ctx.restore();
+    });
   }, [
     pan,
     zoom,
@@ -660,6 +711,17 @@ export default function MapCanvas({
     const isRightClick = e.button === 2;
     const worldPos = screenToWorld(e.clientX, e.clientY);
 
+    // Pressione lunga senza muoversi = ping per tutti (non con gli strumenti di disegno e nebbia del Master)
+    pingFiredRef.current = false;
+    cancelPing();
+    if (e.button === 0 && (activeTool === 'select' || activeTool === 'pan')) {
+      pingTimerRef.current = setTimeout(() => {
+        pingTimerRef.current = undefined;
+        pingFiredRef.current = true;
+        socket?.emit('map-ping', { x: worldPos.x, y: worldPos.y });
+      }, LONG_PRESS_MS);
+    }
+
     // Pan con tasto destro o strumento PAN
     if (isRightClick || activeTool === 'pan') {
       setIsPanning(true);
@@ -712,6 +774,9 @@ export default function MapCanvas({
 
   // MOUSE MOVE: Trascinamento in corso
   const handleMouseMove = (e: React.MouseEvent) => {
+    const dragDist = Math.hypot(e.clientX - mouseDownPosRef.current.x, e.clientY - mouseDownPosRef.current.y);
+    if (pingTimerRef.current && dragDist > 5) cancelPing();
+
     // 1. Gestione Pan
     if (isPanning) {
       setPan({
@@ -752,7 +817,9 @@ export default function MapCanvas({
 
   // MOUSE UP: Rilascio e Rilevamento Click Popover HP
   const handleMouseUp = (e?: React.MouseEvent) => {
-    if (e && activeTool === 'select') {
+    cancelPing();
+    // dopo un ping il rilascio non conta come clic sulla pedina
+    if (e && activeTool === 'select' && !pingFiredRef.current) {
       const dx = e.clientX - mouseDownPosRef.current.x;
       const dy = e.clientY - mouseDownPosRef.current.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -849,6 +916,7 @@ export default function MapCanvas({
         preventDefault: () => {},
       } as any);
     } else if (e.touches.length === 2) {
+      cancelPing();
       const t1 = e.touches[0];
       const t2 = e.touches[1];
       const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);

@@ -664,3 +664,19 @@ test("un NPC nascosto non arriva ai giocatori finché il Master non lo mostra", 
   assert.equal(shown?.id, orc.id, 'mostrato dal Master, compare');
   assert.equal(shown.hp, undefined, 'senza HP');
 });
+
+test('il ping di un giocatore arriva a tutta la stanza, col suo nome e colore', async () => {
+  const dm = client();
+  await ack(dm, 'create-room', { roomId: 'ping', password: 'pw' });
+  const pl = client();
+  await ack(pl, 'join-room', { roomId: 'ping', password: 'pw', playerName: 'Aria', playerColor: '#00ff00' });
+  const got = [];
+  dm.on('map-pinged', (p) => got.push(p));
+
+  pl.emit('map-ping', { x: 'a', y: 1 }); // scartato
+  pl.emit('map-ping', { x: 10, y: 20 });
+  pl.emit('map-ping', { x: 30, y: 40 }); // troppo ravvicinato, scartato
+  await wait(200);
+
+  assert.deepEqual(got, [{ x: 10, y: 20, name: 'Aria', color: '#00ff00' }]);
+});

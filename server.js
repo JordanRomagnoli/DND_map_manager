@@ -724,6 +724,23 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       emitEngagements(roomId, room);
     });
 
+    // PING (tutti): pressione lunga sulla mappa, un segnale che tutti vedono per un attimo. Non viene salvato.
+    socket.on('map-ping', ({ x, y } = {}) => {
+      const room = rooms.get(socket.roomId);
+      if (!room || !Number.isFinite(x) || !Number.isFinite(y)) return;
+      const now = Date.now();
+      if (now - (socket.lastPingAt || 0) < 300) return; // niente raffiche
+      socket.lastPingAt = now;
+
+      const token = room.tokens.find((t) => t.id === socket.tokenId);
+      io.to(socket.roomId).emit('map-pinged', {
+        x,
+        y,
+        name: socket.playerName,
+        color: socket.role === 'MASTER' ? '#fbbf24' : token?.color || '#3b82f6',
+      });
+    });
+
     // TRATTI DI DISEGNO (Master only)
     socket.on('draw-stroke', ({ stroke }) => {
       const roomId = socket.roomId;
