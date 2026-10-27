@@ -529,6 +529,36 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       );
     });
 
+    // DANNI / CURE DI GRUPPO (Master only): delta negativo danneggia, positivo cura, su più pedine insieme
+    // (es. palla di fuoco). Gli HP restano tra 0 e il massimo; come sempre li vedono solo Master e proprietario.
+    socket.on('apply-hp-delta', ({ tokenIds, delta } = {}) => {
+      const roomId = socket.roomId;
+      const room = rooms.get(roomId);
+      const amount = parseInt(delta, 10);
+      if (!room || socket.role !== 'MASTER' || !Array.isArray(tokenIds) || !amount) return;
+
+      room.tokens
+        .filter((t) => tokenIds.includes(t.id))
+        .forEach((token) => {
+          const max = token.maxHp ?? Infinity;
+          token.hp = Math.max(0, Math.min(max, (token.hp ?? 0) + amount));
+
+          const hpAudience = [masterRoom(roomId), token.ownerId].filter(Boolean);
+          io.to(hpAudience).emit('token-hp-updated', { tokenId: token.id, hp: token.hp, maxHp: token.maxHp });
+          createAndBroadcastLog(
+            roomId,
+            'Master',
+            'MASTER',
+            'HP_UPDATE',
+            amount < 0
+              ? `Il Master infligge ${-amount} danni a "${token.name}" (${token.hp}/${token.maxHp}).`
+              : `Il Master cura "${token.name}" di ${amount} HP (${token.hp}/${token.maxHp}).`,
+            {},
+            hpAudience
+          );
+        });
+    });
+
     // CONDIZIONI (Master su tutte le pedine, giocatore sulla propria): attiva o toglie una condizione.
     // Visibili a tutti come le pedine; l'elenco dei nomi validi sta nel client (lib/utils CONDITIONS).
     socket.on('toggle-token-condition', ({ tokenId, condition } = {}) => {

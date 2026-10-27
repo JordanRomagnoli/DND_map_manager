@@ -824,3 +824,26 @@ test('misure: arrivano a tutti col nome dell\'autore e spariscono quando esce', 
     { id: got[0].id, measure: null },
   ]);
 });
+
+test('danni e cure di gruppo: solo il Master, HP tra 0 e il massimo, visibili solo a chi può vederli', async () => {
+  const dm = client();
+  await ack(dm, 'create-room', { roomId: 'gruppo', password: 'pw' });
+  const { token: a } = await ack(dm, 'add-token', { tokenData: { name: 'Goblin A', hp: 7, maxHp: 7 } });
+  const { token: b } = await ack(dm, 'add-token', { tokenData: { name: 'Goblin B', hp: 20, maxHp: 20 } });
+  const pl = client();
+  const { assignedTokenId: heroId } = await ack(pl, 'join-room', { roomId: 'gruppo', password: 'pw', playerName: 'A' });
+  const seenByPlayer = [];
+  pl.on('token-hp-updated', (u) => seenByPlayer.push(u.tokenId));
+  const hp = {};
+  dm.on('token-hp-updated', (u) => (hp[u.tokenId] = u.hp));
+
+  pl.emit('apply-hp-delta', { tokenIds: [a.id, b.id], delta: -100 }); // un giocatore non può
+  dm.emit('apply-hp-delta', { tokenIds: [a.id, b.id, heroId], delta: -12 });
+  await wait(100);
+  assert.deepEqual(hp, { [a.id]: 0, [b.id]: 8, [heroId]: 8 }, 'mai sotto zero');
+
+  dm.emit('apply-hp-delta', { tokenIds: [b.id, heroId], delta: 50 });
+  await wait(100);
+  assert.deepEqual([hp[b.id], hp[heroId]], [20, 20], 'mai sopra il massimo');
+  assert.deepEqual([...new Set(seenByPlayer)], [heroId], 'il giocatore vede solo i propri HP');
+});

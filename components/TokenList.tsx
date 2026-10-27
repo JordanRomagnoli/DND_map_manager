@@ -29,6 +29,20 @@ export default function TokenList({ tokens, role, roomId, socket, myTokenId }: T
     }
   };
 
+  // Danni e cure di gruppo (Master): pedine spuntate e quantità da applicare a tutte
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [amount, setAmount] = useState<string>('');
+  const selected = selectedIds.filter((id) => tokens.some((t) => t.id === id)); // via le pedine rimosse
+  const toggleSelected = (id: string) =>
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const applyToSelected = (sign: 1 | -1) => {
+    const value = parseInt(amount, 10);
+    if (!socket || !value || value < 0) return;
+    socket.emit('apply-hp-delta', { tokenIds: selected, delta: sign * value });
+    setAmount('');
+  };
+
   const filteredTokens = tokens.filter((t) => {
     if (filter === 'player') return t.type !== 'npc';
     if (filter === 'npc') return t.type === 'npc';
@@ -83,6 +97,50 @@ export default function TokenList({ tokens, role, roomId, socket, myTokenId }: T
             </Button>
           </div>
 
+          {/* Danni / cure di gruppo sulle pedine spuntate (es. palla di fuoco) */}
+          {role === 'MASTER' && selected.length > 0 && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                applyToSelected(-1);
+              }}
+              className="flex items-center gap-1.5 p-2 bg-slate-950/80 border-b border-amber-500/20"
+            >
+              <span className="text-[11px] font-semibold text-amber-300 whitespace-nowrap">{selected.length} sel.</span>
+              <input
+                type="number"
+                min={1}
+                inputMode="numeric"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="HP"
+                aria-label="Quantità di HP"
+                className="w-14 h-7 px-1.5 rounded-md bg-slate-900 border border-slate-700 text-xs font-mono text-center text-white outline-none focus:border-amber-400"
+              />
+              <Button type="submit" size="sm" variant="destructive" className="h-7 px-2 text-[11px]" disabled={!amount}>
+                Danno
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="h-7 px-2 text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400/40"
+                disabled={!amount}
+                onClick={() => applyToSelected(1)}
+              >
+                Cura
+              </Button>
+              <button
+                type="button"
+                onClick={() => setSelectedIds([])}
+                className="ml-auto text-slate-400 hover:text-white text-xs px-1"
+                aria-label="Deseleziona tutte"
+                title="Deseleziona tutte"
+              >
+                ✕
+              </button>
+            </form>
+          )}
+
           {/* Elenco Token */}
           <div className="sidebar-content max-h-[calc(100vh-180px)] overflow-y-auto p-3 space-y-2">
             {filteredTokens.length === 0 ? (
@@ -111,6 +169,16 @@ export default function TokenList({ tokens, role, roomId, socket, myTokenId }: T
                 return (
                   <div key={token.id} className="token-card group hover:border-amber-500/40">
                     <div className="flex items-center gap-3 w-full min-w-0">
+                      {role === 'MASTER' && (
+                        <input
+                          type="checkbox"
+                          checked={selected.includes(token.id)}
+                          onChange={() => toggleSelected(token.id)}
+                          aria-label={`Seleziona ${token.name} per danni o cure di gruppo`}
+                          className="w-4 h-4 shrink-0 accent-amber-400 cursor-pointer"
+                        />
+                      )}
+
                       {/* Avatar foto o Iniziale */}
                       {token.avatarUrl ? (
                         <img
