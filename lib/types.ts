@@ -93,4 +93,6 @@ export interface RoomState {
   initiative?: Initiative | null; // null = nessun combattimento in corso
   engagements?: [string, string][]; // coppie di pedine in combattimento tra loro (reciproco)
   fog?: FogOfWar; // assente nelle stanze create prima della nebbia = spenta
+  scenes?: { id: string; name: string }[]; // solo per il Master: le mappe preparate (il contenuto resta sul server)
+  activeSceneId?: string;
 }

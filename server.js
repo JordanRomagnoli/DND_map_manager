@@ -5,8 +5,12 @@ const path = require('path');
 const { Server } = require('socket.io');
 const { createRoomStore } = require('./persistence');
 
-// Stato stanza inviabile ai client: senza password né chiave del Master
-const publicRoom = ({ password, masterKey, masterPassword, playerKeys, ...room }) => room;
+// Stato stanza inviabile ai client: senza password né chiave del Master.
+// Delle scene non attive va solo nome e id: il loro contenuto (mappe pesanti) resta sul server.
+const publicRoom = ({ password, masterKey, masterPassword, playerKeys, scenes, ...room }) => ({
+  ...room,
+  scenes: (scenes || []).map(({ id, name }) => ({ id, name })),
+});
 
 // Gli HP li vedono solo il Master e il proprietario della pedina: il server non li invia agli altri
 const masterRoom = (roomId) => `${roomId}:master`;
@@ -21,8 +25,11 @@ const playerInitiative = (room) =>
     activeTokenId: isHiddenToken(room, room.initiative.activeTokenId) ? '' : room.initiative.activeTokenId,
   };
 const playerEngagements = (room) => (room.engagements || []).filter((pair) => !pair.some((id) => isHiddenToken(room, id)));
+// i giocatori non vedono l'elenco delle scene preparate dal Master
 const playerView = (room, ownTokenId) => ({
   ...publicRoom(room),
+  scenes: undefined,
+  activeSceneId: undefined,
   tokens: room.tokens.filter((t) => !t.hidden).map((t) => (t.id === ownTokenId ? t : hideHp(t))),
   initiative: playerInitiative(room),
   engagements: playerEngagements(room),
@@ -60,6 +67,32 @@ const sortInitiativeEntries = (room, entries) => {
     .sort((a, b) => b.value - a.value);
 };
 
+// SCENE: la scena attiva vive nei campi della stanza (sfondo, disegni, nebbia, NPC); le altre restano
+// in room.scenes col loro contenuto. Le pedine dei giocatori sono comuni a tutte le scene.
+const newSceneId = () => `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+const ensureScenes = (room) => {
+  if (room.scenes?.length) return;
+  room.scenes = [{ id: 'scena1', name: 'Scena 1' }]; // stanze create prima delle scene
+  room.activeSceneId = 'scena1';
+};
+const switchScene = (room, target) => {
+  const current = room.scenes.find((s) => s.id === room.activeSceneId);
+  Object.assign(current, {
+    backgroundUrl: room.backgroundUrl,
+    drawings: room.drawings,
+    fog: room.fog,
+    npcs: room.tokens.filter((t) => t.type === 'npc'),
+  });
+  room.backgroundUrl = target.backgroundUrl ?? null;
+  room.drawings = target.drawings ?? [];
+  room.fog = target.fog ?? { enabled: false, areas: [] };
+  room.tokens = [...room.tokens.filter((t) => t.type !== 'npc'), ...(target.npcs ?? [])];
+  for (const key of ['backgroundUrl', 'drawings', 'fog', 'npcs']) delete target[key];
+  room.activeSceneId = target.id;
+  // gli ingaggi con NPC rimasti nell'altra scena non valgono più
+  room.engagements = (room.engagements || []).filter((pair) => pair.every((id) => room.tokens.some((t) => t.id === id)));
+};
+
 // Una stanza rimasta senza nessuno connesso viene cancellata dopo questo tempo (se nessuno rientra)
 const ROOM_IDLE_TTL_MS = 6 * 60 * 60 * 1000;
 
@@ -80,7 +113,10 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
   const getRoom = (roomId) => {
     if (!rooms.has(roomId) && store) {
       const saved = store.load(roomId);
-      if (saved) rooms.set(roomId, saved);
+      if (saved) {
+        ensureScenes(saved);
+        rooms.set(roomId, saved);
+      }
     }
     return rooms.get(roomId);
   };
@@ -251,6 +287,8 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
         initiative: null, // { entries: [{ tokenId, value }], activeTokenId, round } durante il combattimento
         engagements: [], // coppie [idA, idB] di pedine in combattimento tra loro
         fog: { enabled: false, areas: [] }, // nebbia di guerra: aree { x, y, w, h, hide } applicate in ordine
+        scenes: [{ id: 'scena1', name: 'Scena 1' }], // vedi switchScene
+        activeSceneId: 'scena1',
       };
 
       rooms.set(cleanRoomId, newRoom);
@@ -786,6 +824,67 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
         const named = cleanTitle ? `: "${cleanTitle}"` : '.';
         createAndBroadcastLog(roomId, 'Master', 'MASTER', 'MAP_CHANGE', `Il Master mostra un handout${named}`);
       }
+    });
+
+    // Dopo un cambio di scena ognuno riceve la stanza intera, filtrata per il suo ruolo
+    const sendRoomToAll = (roomId, room) => {
+      for (const id of io.sockets.adapter.rooms.get(roomId) ?? []) {
+        const s = io.sockets.sockets.get(id);
+        s?.emit('room-reloaded', s.role === 'MASTER' ? publicRoom(room) : playerView(room, s.tokenId));
+      }
+    };
+
+    // Le scene si cambiano solo fuori dal combattimento: l'iniziativa riguarda le pedine della scena
+    const sceneError = (room) => {
+      if (!room || socket.role !== 'MASTER') return 'Solo il Master può gestire le scene.';
+      if (room.initiative) return 'Termina il combattimento prima di cambiare scena.';
+      return null;
+    };
+
+    const goToScene = (roomId, room, target) => {
+      switchScene(room, target);
+      sendRoomToAll(roomId, room);
+      createAndBroadcastLog(roomId, 'Master', 'MASTER', 'MAP_CHANGE', `Il Master passa alla scena "${target.name}".`);
+    };
+
+    // NUOVA SCENA (Master only): parte vuota (foglio bianco, niente NPC né nebbia) e diventa quella attiva
+    socket.on('create-scene', ({ name } = {}, callback) => {
+      const roomId = socket.roomId;
+      const room = rooms.get(roomId);
+      const error = sceneError(room);
+      if (error) return callback?.({ success: false, error });
+
+      const cleanName = typeof name === 'string' ? name.trim().slice(0, 40) : '';
+      const scene = { id: newSceneId(), name: cleanName || `Scena ${room.scenes.length + 1}` };
+      room.scenes.push(scene);
+      goToScene(roomId, room, scene);
+      callback?.({ success: true });
+    });
+
+    // CAMBIA SCENA (Master only)
+    socket.on('switch-scene', ({ sceneId } = {}, callback) => {
+      const roomId = socket.roomId;
+      const room = rooms.get(roomId);
+      const error = sceneError(room);
+      if (error) return callback?.({ success: false, error });
+
+      const target = room.scenes.find((s) => s.id === sceneId);
+      if (!target) return callback?.({ success: false, error: 'Scena non trovata.' });
+      if (target.id !== room.activeSceneId) goToScene(roomId, room, target);
+      callback?.({ success: true });
+    });
+
+    // ELIMINA SCENA (Master only): non quella attiva. Con lei spariscono la sua mappa e i suoi NPC.
+    socket.on('delete-scene', ({ sceneId } = {}, callback) => {
+      const roomId = socket.roomId;
+      const room = rooms.get(roomId);
+      if (!room || socket.role !== 'MASTER') return callback?.({ success: false, error: 'Solo il Master può gestire le scene.' });
+      if (sceneId === room.activeSceneId) return callback?.({ success: false, error: 'Non puoi eliminare la scena in corso.' });
+      if (!room.scenes.some((s) => s.id === sceneId)) return callback?.({ success: false, error: 'Scena non trovata.' });
+
+      room.scenes = room.scenes.filter((s) => s.id !== sceneId);
+      io.to(masterRoom(roomId)).emit('scenes-updated', publicRoom(room).scenes);
+      callback?.({ success: true });
     });
 
     // TRATTI DI DISEGNO (Master only)

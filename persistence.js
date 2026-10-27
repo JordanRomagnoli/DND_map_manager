@@ -1,6 +1,6 @@
 // Salvataggio delle stanze su disco, così la campagna sopravvive allo spegnimento del server.
-// Un file JSON per stanza; la mappa di sfondo (fino a ~10MB) sta in un file a parte e si
-// riscrive solo quando cambia, non a ogni mossa.
+// Un file JSON per stanza; le mappe di sfondo (fino a ~10MB ciascuna, una per scena) stanno in file
+// a parte e si riscrivono solo quando cambiano, non a ogni mossa.
 const fs = require('fs');
 const path = require('path');
 
@@ -13,7 +13,15 @@ function createRoomStore(dir, { saveDelayMs = SAVE_DELAY_MS } = {}) {
   // coincidere con nomi riservati di Windows (CON, NUL...)
   const fileBase = (roomId) => path.join(dir, `room-${Buffer.from(roomId).toString('base64url')}`);
   const pending = new Map(); // roomId -> { room, timer }
-  const savedBackgrounds = new Map(); // roomId -> backgroundUrl già scritto su disco
+  const savedBackgrounds = new Map(); // roomId -> Map(id scena -> backgroundUrl già scritto su disco)
+
+  // File della mappa di una scena. Chiave '' = stanze di prima delle scene. Gli id delle scene
+  // li genera il server (solo lettere e cifre), quindi sono sicuri come nomi di file.
+  const bgFile = (roomId, sceneId) => `${fileBase(roomId)}${sceneId ? `.${sceneId}` : ''}.bg`;
+  const readBg = (roomId, sceneId) => {
+    const file = bgFile(roomId, sceneId);
+    return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+  };
 
   // Scrive su un file temporaneo e poi lo rinomina: un'interruzione a metà non lascia file corrotti
   const writeAtomic = (file, data) => {
@@ -23,13 +31,23 @@ function createRoomStore(dir, { saveDelayMs = SAVE_DELAY_MS } = {}) {
 
   const save = (room) => {
     try {
-      const { backgroundUrl, playerKeys, ...rest } = room;
-      if (savedBackgrounds.get(room.id) !== backgroundUrl) {
-        if (backgroundUrl) writeAtomic(`${fileBase(room.id)}.bg`, backgroundUrl);
-        else fs.rmSync(`${fileBase(room.id)}.bg`, { force: true });
-        savedBackgrounds.set(room.id, backgroundUrl);
+      const { backgroundUrl, playerKeys, scenes, ...rest } = room;
+      // la mappa della scena attiva è room.backgroundUrl, quelle delle altre scene stanno nella scena
+      const backgrounds = new Map((scenes || []).map((s) => [s.id, s.backgroundUrl ?? null]));
+      backgrounds.set(room.activeSceneId || '', backgroundUrl);
+      const saved = savedBackgrounds.get(room.id) || new Map();
+      for (const [sceneId, url] of backgrounds) {
+        if (saved.get(sceneId) === url) continue;
+        if (url) writeAtomic(bgFile(room.id, sceneId), url);
+        else fs.rmSync(bgFile(room.id, sceneId), { force: true });
       }
-      writeAtomic(`${fileBase(room.id)}.json`, JSON.stringify({ ...rest, playerKeys: [...playerKeys] }));
+      for (const sceneId of saved.keys()) {
+        if (!backgrounds.has(sceneId)) fs.rmSync(bgFile(room.id, sceneId), { force: true }); // scena eliminata
+      }
+      savedBackgrounds.set(room.id, backgrounds);
+
+      const lightScenes = scenes?.map(({ backgroundUrl: _bg, ...scene }) => scene);
+      writeAtomic(`${fileBase(room.id)}.json`, JSON.stringify({ ...rest, scenes: lightScenes, playerKeys: [...playerKeys] }));
     } catch (err) {
       console.error(`Errore nel salvataggio della stanza ${room.id}:`, err);
     }
@@ -58,10 +76,13 @@ function createRoomStore(dir, { saveDelayMs = SAVE_DELAY_MS } = {}) {
       if (!fs.existsSync(file)) return null;
       try {
         const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-        const bgFile = `${fileBase(roomId)}.bg`;
-        const backgroundUrl = fs.existsSync(bgFile) ? fs.readFileSync(bgFile, 'utf8') : null;
-        savedBackgrounds.set(roomId, backgroundUrl);
-        return { ...data, backgroundUrl, playerKeys: new Map(data.playerKeys) };
+        const activeId = data.activeSceneId || '';
+        const scenes = data.scenes?.map((s) => (s.id === activeId ? s : { ...s, backgroundUrl: readBg(roomId, s.id) }));
+        const backgroundUrl = readBg(roomId, activeId);
+        const backgrounds = new Map((scenes || []).map((s) => [s.id, s.backgroundUrl ?? null]));
+        backgrounds.set(activeId, backgroundUrl);
+        savedBackgrounds.set(roomId, backgrounds);
+        return { ...data, scenes, backgroundUrl, playerKeys: new Map(data.playerKeys) };
       } catch (err) {
         console.error(`Stanza salvata non leggibile, ignorata: ${file}`, err);
         return null;
@@ -84,8 +105,11 @@ function createRoomStore(dir, { saveDelayMs = SAVE_DELAY_MS } = {}) {
       clearTimeout(pending.get(roomId)?.timer);
       pending.delete(roomId);
       savedBackgrounds.delete(roomId);
-      fs.rmSync(`${fileBase(roomId)}.json`, { force: true });
-      fs.rmSync(`${fileBase(roomId)}.bg`, { force: true });
+      // il file della stanza e le mappe di tutte le sue scene (il punto separa il codice dal resto)
+      const prefix = `${path.basename(fileBase(roomId))}.`;
+      fs.readdirSync(dir)
+        .filter((f) => f.startsWith(prefix))
+        .forEach((f) => fs.rmSync(path.join(dir, f), { force: true }));
     },
 
     // Scrive subito i salvataggi in attesa (alla chiusura del server)

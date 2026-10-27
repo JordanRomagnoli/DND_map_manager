@@ -721,3 +721,85 @@ test('condizioni: il giocatore cambia solo le proprie, tutti le vedono', async (
   assert.deepEqual(got.at(-1), { tokenId: goblin.id, conditions: ['Stordito'] });
   assert.equal(got.length, 4);
 });
+
+test('scene: ognuna ritrova mappa, disegni, nebbia e NPC; le pedine dei giocatori restano', async () => {
+  const dm = client();
+  const { masterKey } = await ack(dm, 'create-room', { roomId: 'scene', password: 'pw' });
+  const pl = client();
+  const { assignedTokenId: heroId, room: playerRoom } = await ack(pl, 'join-room', { roomId: 'scene', password: 'pw', playerName: 'A' });
+  assert.equal(playerRoom.scenes, undefined, "i giocatori non vedono l'elenco delle scene");
+
+  const { token: orc } = await ack(dm, 'add-token', { tokenData: { name: 'Orco' } });
+  dm.emit('update-background', { backgroundUrl: 'data:image/png;base64,TAVERNA' });
+  dm.emit('draw-stroke', { stroke: { id: 's1', points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] } });
+  dm.emit('update-fog', { enabled: true });
+  await wait(100);
+
+  const reloads = [];
+  pl.on('room-reloaded', (r) => reloads.push(r));
+  const created = await ack(dm, 'create-scene', { name: 'Dungeon' });
+  assert.ok(created.success);
+  await wait(100);
+  const dungeon = reloads.at(-1);
+  assert.equal(dungeon.backgroundUrl, null, 'la nuova scena parte vuota');
+  assert.deepEqual(dungeon.tokens.map((t) => t.id), [heroId], "l'Orco resta nella taverna, l'eroe viene con noi");
+  assert.equal(dungeon.fog.enabled, false);
+  assert.equal(dungeon.scenes, undefined);
+
+  // dal Master (che rientra) l'elenco delle scene, senza contenuto
+  const master = await ack(client(), 'create-room', { roomId: 'scene', masterKey });
+  assert.deepEqual(master.room.scenes.map((s) => s.name), ['Scena 1', 'Dungeon']);
+  assert.ok(master.room.scenes.every((s) => Object.keys(s).sort().join() === 'id,name'));
+
+  // in combattimento non si cambia scena
+  dm.emit('set-initiative', { entries: [{ tokenId: heroId, value: 10 }] });
+  await wait(100);
+  const blocked = await ack(dm, 'switch-scene', { sceneId: master.room.scenes[0].id });
+  assert.equal(blocked.success, false);
+  dm.emit('end-initiative');
+  await wait(100);
+
+  assert.ok((await ack(dm, 'switch-scene', { sceneId: master.room.scenes[0].id })).success);
+  await wait(100);
+  const tavern = reloads.at(-1);
+  assert.equal(tavern.backgroundUrl, 'data:image/png;base64,TAVERNA');
+  assert.equal(tavern.drawings.length, 1);
+  assert.equal(tavern.fog.enabled, true);
+  assert.deepEqual(tavern.tokens.map((t) => t.id).sort(), [heroId, orc.id].sort());
+
+  // la scena attiva non si elimina, le altre sì
+  assert.equal((await ack(dm, 'delete-scene', { sceneId: master.room.scenes[0].id })).success, false);
+  assert.ok((await ack(dm, 'delete-scene', { sceneId: master.room.scenes[1].id })).success);
+  assert.equal((await ack(pl, 'create-scene', { name: 'X' })).success, false, 'un giocatore non può');
+});
+
+test('scene dopo un riavvio: ogni mappa nel suo file, eliminata con la scena', async () => {
+  const dir = tempDir();
+  const first = await startServer({ store: createRoomStore(dir, { saveDelayMs: 20 }) });
+  const dm = first.open();
+  await ack(dm, 'create-room', { roomId: 'atlante', password: 'pw', masterPassword: 'm' });
+  dm.emit('update-background', { backgroundUrl: 'data:image/png;base64,UNO' });
+  await ack(dm, 'create-scene', { name: 'Due' });
+  dm.emit('update-background', { backgroundUrl: 'data:image/png;base64,DUE' });
+  await wait(100);
+  first.stop();
+
+  assert.equal(fs.readdirSync(dir).filter((f) => f.endsWith('.bg')).length, 2, 'una mappa per scena');
+  assert.ok(!fs.readFileSync(path.join(dir, fs.readdirSync(dir).find((f) => f.endsWith('.json'))), 'utf8').includes('UNO'), 'il JSON resta leggero');
+
+  const second = await startServer({ store: createRoomStore(dir, { saveDelayMs: 20 }) });
+  try {
+    const dm2 = second.open();
+    const { room } = await ack(dm2, 'create-room', { roomId: 'atlante', masterPassword: 'm' });
+    assert.equal(room.backgroundUrl, 'data:image/png;base64,DUE');
+    const reloaded = new Promise((resolve) => dm2.once('room-reloaded', resolve));
+    await ack(dm2, 'switch-scene', { sceneId: room.scenes[0].id });
+    assert.equal((await reloaded).backgroundUrl, 'data:image/png;base64,UNO');
+
+    await ack(dm2, 'delete-scene', { sceneId: room.scenes[1].id });
+    await wait(100);
+    assert.equal(fs.readdirSync(dir).filter((f) => f.endsWith('.bg')).length, 1, 'la mappa della scena eliminata sparisce');
+  } finally {
+    second.stop();
+  }
+});

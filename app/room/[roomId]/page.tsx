@@ -308,6 +308,13 @@ export default function GameRoomPage() {
       });
     });
 
+    // Cambio di scena: la stanza arriva intera (mappa, disegni, nebbia e pedine della nuova scena)
+    newSocket.on('room-reloaded', (newRoom: RoomState) => setRoom(newRoom));
+
+    newSocket.on('scenes-updated', (scenes: RoomState['scenes']) => {
+      setRoom((prev) => (prev ? { ...prev, scenes } : null));
+    });
+
     newSocket.on('fog-updated', (fog) => {
       setRoom((prev) => (prev ? { ...prev, fog } : null));
     });

@@ -17,6 +17,7 @@ import {
   Ruler,
   CloudFog,
   ScrollText,
+  Layers,
   Sun,
   Eye,
   EyeOff,
@@ -251,6 +252,17 @@ export default function MasterToolbar({
     if (confirm('Ricoprire di nebbia tutta la mappa?')) socket?.emit('update-fog', { reset: true });
   };
 
+  // Scene: gli errori del server (es. combattimento in corso) arrivano come avviso
+  const sceneAction = (event: string, data: object) =>
+    socket?.emit(event, data, (res: { success: boolean; error?: string }) => {
+      if (!res?.success) alert(res?.error || 'Operazione non riuscita.');
+    });
+
+  const handleNewScene = () => {
+    const name = prompt('Nome della nuova scena (es. Taverna, Dungeon). Parte da un foglio bianco:');
+    if (name !== null) sceneAction('create-scene', { name });
+  };
+
   const isDrawTool = activeTool === 'brush' || activeTool === 'eraser' || activeTool === 'shape';
 
   // Nebbia: il primo clic la accende e passa a "Rivela"; se è già accesa riprende a rivelare
@@ -391,6 +403,63 @@ export default function MasterToolbar({
               title="Mostra a tutti un'immagine: lettera, ritratto, oggetto"
             />
             <input ref={handoutInputRef} type="file" accept="image/*" onChange={handleHandoutUpload} className="hidden" />
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <ToolButton icon={<Layers size={20} />} label="Scene" title="Prepara più mappe e passa dall'una all'altra" />
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-1.5 bg-slate-900/95 border-amber-500/30 backdrop-blur-xl shadow-2xl flex flex-col gap-1">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">
+                  Scene della campagna
+                </div>
+                {(room.scenes ?? []).map((scene) => {
+                  const current = scene.id === room.activeSceneId;
+                  return (
+                    <div key={scene.id} className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-current={current}
+                        className={`flex-1 min-w-0 justify-start gap-2 text-xs h-8 ${
+                          current
+                            ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30'
+                            : 'text-slate-200 hover:bg-slate-800'
+                        }`}
+                        onClick={() => !current && sceneAction('switch-scene', { sceneId: scene.id })}
+                      >
+                        <span className="truncate">{scene.name}</span>
+                        {current && <span className="ml-auto text-[10px] font-semibold opacity-80">in corso</span>}
+                      </Button>
+                      {!current && (
+                        <button
+                          type="button"
+                          aria-label={`Elimina la scena ${scene.name}`}
+                          title="Elimina scena"
+                          onClick={() =>
+                            confirm(`Eliminare la scena "${scene.name}" con la sua mappa e i suoi NPC?`) &&
+                            sceneAction('delete-scene', { sceneId: scene.id })
+                          }
+                          className="p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="justify-start gap-2 text-xs h-8 text-amber-300 hover:bg-slate-800"
+                  onClick={handleNewScene}
+                >
+                  <PlusCircle size={14} /> Nuova scena
+                </Button>
+                <p className="px-2 py-1 text-[10px] text-slate-400 leading-snug">
+                  Ogni scena ricorda mappa, disegni, nebbia e NPC. Le pedine dei giocatori passano da una scena all'altra.
+                </p>
+              </PopoverContent>
+            </Popover>
           </ToolGroup>
 
           <Divider />
