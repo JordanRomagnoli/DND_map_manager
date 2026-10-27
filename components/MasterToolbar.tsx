@@ -17,6 +17,9 @@ import {
   ChevronDown,
   Ruler,
   Camera,
+  CloudFog,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 import { RoomState } from '@/lib/types';
@@ -46,8 +49,8 @@ import {
 interface MasterToolbarProps {
   room: RoomState;
   socket: Socket | null;
-  activeTool: 'select' | 'pan' | 'brush' | 'eraser' | 'shape';
-  setActiveTool: (tool: 'select' | 'pan' | 'brush' | 'eraser' | 'shape') => void;
+  activeTool: 'select' | 'pan' | 'brush' | 'eraser' | 'shape' | 'fog-reveal' | 'fog-hide';
+  setActiveTool: (tool: 'select' | 'pan' | 'brush' | 'eraser' | 'shape' | 'fog-reveal' | 'fog-hide') => void;
   activeShape: 'rectangle' | 'circle';
   setActiveShape: (shape: 'rectangle' | 'circle') => void;
   brushColor: string;
@@ -175,6 +178,24 @@ export default function MasterToolbar({
       gridVisible: !room.gridVisible,
     });
   };
+
+  const fog = room.fog ?? { enabled: false, areas: [] };
+  const isFogTool = activeTool === 'fog-reveal' || activeTool === 'fog-hide';
+
+  // Accendendo la nebbia si passa subito allo strumento per rivelare; spegnendola si torna a selezionare
+  const handleToggleFog = () => {
+    socket?.emit('update-fog', { enabled: !fog.enabled });
+    setActiveTool(fog.enabled ? 'select' : 'fog-reveal');
+  };
+
+  const handleCoverAll = () => {
+    if (confirm('Ricoprire di nebbia tutta la mappa?')) socket?.emit('update-fog', { reset: true });
+  };
+
+  const fogItemClass = (on: boolean) =>
+    `justify-start gap-2 text-xs h-8 ${
+      on ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30' : 'text-slate-200 hover:bg-slate-800'
+    }`;
 
   return (
     <TooltipProvider>
@@ -368,6 +389,68 @@ export default function MasterToolbar({
             </TooltipTrigger>
             <TooltipContent>Evoca Nuovo NPC / Mostro</TooltipContent>
           </Tooltip>
+        </div>
+
+        <div className="toolbar-divider" />
+
+        {/* Nebbia di guerra */}
+        <div className="toolbar-group">
+          <Popover>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="icon"
+                    className={`gap-1 px-2.5 w-auto ${
+                      isFogTool ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-amber-500/30' : fog.enabled ? 'text-amber-400' : ''
+                    }`}
+                  >
+                    <CloudFog size={19} />
+                    <ChevronDown size={13} className="opacity-70" />
+                  </Button>
+                </PopoverTrigger>
+              </TooltipTrigger>
+              <TooltipContent>Nebbia di Guerra</TooltipContent>
+            </Tooltip>
+            <PopoverContent className="w-56 p-1.5 bg-slate-900/95 border-amber-500/30 backdrop-blur-xl shadow-2xl flex flex-col gap-1">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">
+                Nebbia di Guerra
+              </div>
+              <Button variant="ghost" size="sm" className={fogItemClass(fog.enabled)} onClick={handleToggleFog}>
+                <CloudFog size={16} className="text-amber-400" />
+                <span>{fog.enabled ? 'Attiva (clic per spegnere)' : 'Spenta (clic per attivare)'}</span>
+              </Button>
+              {fog.enabled && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={fogItemClass(activeTool === 'fog-reveal')}
+                    onClick={() => setActiveTool('fog-reveal')}
+                  >
+                    <Eye size={16} className="text-amber-400" />
+                    <span>Rivela area</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={fogItemClass(activeTool === 'fog-hide')}
+                    onClick={() => setActiveTool('fog-hide')}
+                  >
+                    <EyeOff size={16} className="text-amber-400" />
+                    <span>Ricopri area</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" className={fogItemClass(false)} onClick={handleCoverAll}>
+                    <Trash2 size={16} className="text-red-400" />
+                    <span>Ricopri tutta la mappa</span>
+                  </Button>
+                  <p className="px-2 py-1 text-[10px] text-slate-400 leading-snug">
+                    Trascina sulla mappa per scegliere i quadretti. Gli NPC sotto la nebbia sono invisibili ai giocatori.
+                  </p>
+                </>
+              )}
+            </PopoverContent>
+          </Popover>
         </div>
 
         <div className="toolbar-divider" />

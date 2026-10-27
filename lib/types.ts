@@ -55,6 +55,20 @@ export interface ActionLogRecord {
   details?: Record<string, any>;
 }
 
+// Nebbia di guerra: rettangoli applicati in ordine, ognuno rivela (o con hide ricopre) la sua area
+export interface FogArea {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  hide?: boolean;
+}
+
+export interface FogOfWar {
+  enabled: boolean;
+  areas: FogArea[];
+}
+
 // Combattimento a iniziativa: entries già ordinate dal server (valore più alto prima)
 export interface Initiative {
   entries: { tokenId: string; value: number }[];
@@ -76,4 +90,5 @@ export interface RoomState {
   logs?: ActionLogRecord[];
   initiative?: Initiative | null; // null = nessun combattimento in corso
   engagements?: [string, string][]; // coppie di pedine in combattimento tra loro (reciproco)
+  fog?: FogOfWar; // assente nelle stanze create prima della nebbia = spenta
 }

@@ -226,6 +226,7 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
         logs: [],
         initiative: null, // { entries: [{ tokenId, value }], activeTokenId, round } durante il combattimento
         engagements: [], // coppie [idA, idB] di pedine in combattimento tra loro
+        fog: { enabled: false, areas: [] }, // nebbia di guerra: aree { x, y, w, h, hide } applicate in ordine
       };
 
       rooms.set(cleanRoomId, newRoom);
@@ -670,6 +671,36 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
 
       room.drawings.push(stroke);
       io.to(roomId).emit('stroke-drawn', stroke);
+    });
+
+    // NEBBIA DI GUERRA (Master only): enabled la accende o spegne, area rivela un rettangolo
+    // (o lo ricopre con hide), reset ricopre tutta la mappa
+    const MAX_FOG_AREAS = 2000;
+    socket.on('update-fog', ({ enabled, area, reset } = {}) => {
+      const roomId = socket.roomId;
+      const room = rooms.get(roomId);
+      if (!room || socket.role !== 'MASTER') return;
+
+      if (!room.fog) room.fog = { enabled: false, areas: [] };
+      const wasEnabled = room.fog.enabled;
+      if (typeof enabled === 'boolean') room.fog.enabled = enabled;
+      if (reset) room.fog.areas = [];
+      const valid = area && ['x', 'y', 'w', 'h'].every((k) => Number.isFinite(area[k])) && area.w > 0 && area.h > 0;
+      if (valid && room.fog.areas.length < MAX_FOG_AREAS) {
+        room.fog.areas.push({ x: area.x, y: area.y, w: area.w, h: area.h, hide: Boolean(area.hide) });
+      }
+
+      io.to(roomId).emit('fog-updated', room.fog);
+
+      if (room.fog.enabled !== wasEnabled) {
+        createAndBroadcastLog(
+          roomId,
+          'Master',
+          'MASTER',
+          'MAP_CHANGE',
+          room.fog.enabled ? 'Il Master ha avvolto la mappa nella nebbia di guerra.' : 'Il Master ha dissolto la nebbia di guerra.'
+        );
+      }
     });
 
     // PULIZIA CANVAS (Master only)

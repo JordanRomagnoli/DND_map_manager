@@ -1,6 +1,7 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import type { Socket } from 'socket.io-client';
+import type { FogOfWar, Token } from './types';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -96,3 +97,16 @@ export async function sendTokenAvatar(
     return undefined;
   }
 }
+
+// Il punto è sotto la nebbia? Vince l'ultima area che lo contiene; fuori da ogni area è coperto
+export function isFogged(fog: FogOfWar | undefined, x: number, y: number): boolean {
+  if (!fog?.enabled) return false;
+  let fogged = true;
+  for (const a of fog.areas) {
+    if (x >= a.x && x < a.x + a.w && y >= a.y && y < a.y + a.h) fogged = Boolean(a.hide);
+  }
+  return fogged;
+}
+
+// Per i giocatori gli NPC sotto la nebbia non esistono: né sulla mappa né nell'elenco
+export const hiddenByFog = (fog: FogOfWar | undefined, token: Token) => token.type === 'npc' && isFogged(fog, token.x, token.y);

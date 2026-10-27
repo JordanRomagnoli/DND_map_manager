@@ -611,3 +611,27 @@ test('il Master elimina una stanza: sparisce da elenco e disco, chi è dentro vi
     srv.stop();
   }
 });
+
+test('nebbia di guerra: solo il Master la modifica, arriva a tutti e resta nella stanza', async () => {
+  const dm = client();
+  const { masterKey } = await ack(dm, 'create-room', { roomId: 'nebbia', password: 'pw' });
+  const pl = client();
+  await ack(pl, 'join-room', { roomId: 'nebbia', password: 'pw', playerName: 'A' });
+  const seen = [];
+  pl.on('fog-updated', (fog) => seen.push(fog));
+
+  pl.emit('update-fog', { enabled: true }); // un giocatore non può
+  dm.emit('update-fog', { enabled: true });
+  dm.emit('update-fog', { area: { x: 0, y: 0, w: 100, h: 50 } });
+  dm.emit('update-fog', { area: { x: 'a', y: 0, w: 1, h: 1 } }); // scartata
+  await wait(200);
+
+  const expected = { enabled: true, areas: [{ x: 0, y: 0, w: 100, h: 50, hide: false }] };
+  assert.deepEqual(seen.at(-1), expected);
+  const res = await ack(client(), 'create-room', { roomId: 'nebbia', masterKey });
+  assert.deepEqual(res.room.fog, expected);
+
+  dm.emit('update-fog', { reset: true });
+  await wait(100);
+  assert.deepEqual(seen.at(-1).areas, [], 'ricopri tutto');
+});

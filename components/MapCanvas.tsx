@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { RoomState, Token, DrawingStroke, UserRole } from '@/lib/types';
+import { RoomState, Token, DrawingStroke, UserRole, FogArea, FogOfWar } from '@/lib/types';
 import { Socket } from 'socket.io-client';
 import { Plus, Minus, Maximize2, Heart, Shield, Skull, Check, Camera, Upload, Image as ImageIcon, Trash2, Swords } from 'lucide-react';
-import { sendTokenAvatar } from '@/lib/utils';
+import { sendTokenAvatar, hiddenByFog } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -45,12 +45,26 @@ function drawStroke(ctx: CanvasRenderingContext2D, stroke: DrawingStroke) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
+// Rettangolo di nebbia dal trascinamento, esteso ai quadretti toccati (un clic = un quadretto)
+function fogAreaFrom(points: { x: number; y: number }[], gridSize: number, hide: boolean): FogArea {
+  const [a, b] = [points[0], points[points.length - 1]];
+  const x = Math.floor(Math.min(a.x, b.x) / gridSize) * gridSize;
+  const y = Math.floor(Math.min(a.y, b.y) / gridSize) * gridSize;
+  return {
+    x,
+    y,
+    w: (Math.floor(Math.max(a.x, b.x) / gridSize) + 1) * gridSize - x,
+    h: (Math.floor(Math.max(a.y, b.y) / gridSize) + 1) * gridSize - y,
+    hide,
+  };
+}
+
 interface MapCanvasProps {
   room: RoomState;
   role: UserRole;
   myTokenId?: string;
   socket: Socket | null;
-  activeTool: 'select' | 'pan' | 'brush' | 'eraser' | 'shape';
+  activeTool: 'select' | 'pan' | 'brush' | 'eraser' | 'shape' | 'fog-reveal' | 'fog-hide';
   activeShape?: 'rectangle' | 'circle';
   brushColor: string;
   brushWidth: number;
@@ -69,6 +83,7 @@ export default function MapCanvas({
   centerTokenTrigger,
 }: MapCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isFogTool = activeTool === 'fog-reveal' || activeTool === 'fog-hide';
 
   // Pan e Zoom state
   const [zoom, setZoom] = useState<number>(1);
@@ -158,6 +173,8 @@ export default function MapCanvas({
   const avatarImageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const drawingsLayerRef = useRef<HTMLCanvasElement | null>(null);
   const drawingsCacheRef = useRef<{ drawings: DrawingStroke[]; panX: number; panY: number; zoom: number } | null>(null);
+  const fogLayerRef = useRef<HTMLCanvasElement | null>(null);
+  const fogCacheRef = useRef<{ fog: FogOfWar; panX: number; panY: number; zoom: number } | null>(null);
   const [bgLoaded, setBgLoaded] = useState<boolean>(false);
 
   // Caricamento Sfondo JPG/PNG quando cambia l'URL
@@ -264,7 +281,7 @@ export default function MapCanvas({
       room.drawings.forEach((stroke) => drawStroke(layerCtx, stroke));
 
       // Anteprima del tratto o della forma geometrica in corso di disegno dal Master
-      if (isDrawing) {
+      if (isDrawing && !isFogTool) {
         drawStroke(layerCtx, {
           id: 'preview',
           points: currentStrokeRef.current,
@@ -281,6 +298,50 @@ export default function MapCanvas({
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(layer, 0, 0);
     ctx.restore();
+
+    // 3.2 NEBBIA DI GUERRA: copre tutto tranne le aree rivelate. I giocatori la vedono opaca,
+    // il Master in trasparenza per continuare a vedere la mappa. Canvas separato come i disegni.
+    if (room.fog?.enabled) {
+      if (!fogLayerRef.current) fogLayerRef.current = document.createElement('canvas');
+      const fogLayer = fogLayerRef.current;
+      const fogCache = fogCacheRef.current;
+      const preview = isDrawing && isFogTool;
+      const fogIsStale =
+        preview ||
+        !fogCache ||
+        fogCache.fog !== room.fog ||
+        fogCache.panX !== pan.x ||
+        fogCache.panY !== pan.y ||
+        fogCache.zoom !== zoom ||
+        fogLayer.width !== width ||
+        fogLayer.height !== height;
+
+      const fogCtx = fogLayer.getContext('2d');
+      if (fogIsStale && fogCtx) {
+        fogLayer.width = width;
+        fogLayer.height = height;
+        fogCtx.fillStyle = '#0b0d14';
+        fogCtx.fillRect(0, 0, width, height);
+        fogCtx.setTransform(zoom, 0, 0, zoom, pan.x, pan.y);
+        const areas = preview
+          ? [...room.fog.areas, fogAreaFrom(currentStrokeRef.current, room.gridSize, activeTool === 'fog-hide')]
+          : room.fog.areas;
+        areas.forEach((area) => {
+          fogCtx.globalCompositeOperation = area.hide ? 'source-over' : 'destination-out';
+          fogCtx.fillRect(area.x, area.y, area.w, area.h);
+        });
+        fogCacheRef.current = preview ? null : { fog: room.fog, panX: pan.x, panY: pan.y, zoom };
+      }
+
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = role === 'MASTER' ? 0.55 : 1;
+      ctx.drawImage(fogLayer, 0, 0);
+      ctx.restore();
+    }
+
+    // Pedine visibili: per i giocatori gli NPC sotto la nebbia non ci sono
+    const visibleTokens = role === 'MASTER' ? room.tokens : room.tokens.filter((t) => !hiddenByFog(room.fog, t));
 
     // 3.5 LAYER FEEDBACK VISIVO MOVIMENTO LOCALE (Solo per il controllore durante il drag)
     if (draggedTokenId && dragStartPosRef.current && localDragPosRef.current) {
@@ -353,8 +414,8 @@ export default function MapCanvas({
     ctx.lineWidth = 3 / zoom;
     ctx.setLineDash([10 / zoom, 6 / zoom]);
     room.engagements?.forEach(([idA, idB]) => {
-      const a = room.tokens.find((t) => t.id === idA);
-      const b = room.tokens.find((t) => t.id === idB);
+      const a = visibleTokens.find((t) => t.id === idA);
+      const b = visibleTokens.find((t) => t.id === idB);
       if (!a || !b) return;
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
@@ -364,7 +425,7 @@ export default function MapCanvas({
     ctx.restore();
 
     // 4. LAYER TOKEN (PLAYER & NPC)
-    room.tokens.forEach((token) => {
+    visibleTokens.forEach((token) => {
       const radius = (token.size || room.gridSize * 0.8) / 2;
       const isMine = token.id === myTokenId;
       const isSelected = draggedTokenId === token.id;
@@ -512,6 +573,7 @@ export default function MapCanvas({
     zoom,
     room,
     isDrawing,
+    isFogTool,
     activeTool,
     activeShape,
     brushColor,
@@ -584,6 +646,7 @@ export default function MapCanvas({
   // Pedina sotto il punto (la più in alto): con avatar conta tutto il quadretto, senza avatar il cerchio
   const findTokenAt = (pos: { x: number; y: number }) =>
     [...room.tokens].reverse().find((t) => {
+      if (role !== 'MASTER' && hiddenByFog(room.fog, t)) return false;
       const dx = pos.x - t.x;
       const dy = pos.y - t.y;
       if (t.avatarUrl) return Math.max(Math.abs(dx), Math.abs(dy)) <= room.gridSize / 2;
@@ -636,9 +699,9 @@ export default function MapCanvas({
     }
 
     // STRUMENTO PENNELLO / GOMMA / FORME GEOMETRICHE (Solo per il Master)
-    if ((activeTool === 'brush' || activeTool === 'eraser' || activeTool === 'shape') && role === 'MASTER') {
+    if ((activeTool === 'brush' || activeTool === 'eraser' || activeTool === 'shape' || isFogTool) && role === 'MASTER') {
       setIsDrawing(true);
-      if (activeTool === 'shape') {
+      if (activeTool === 'shape' || isFogTool) {
         currentStrokeRef.current = [{ x: worldPos.x, y: worldPos.y }, { x: worldPos.x, y: worldPos.y }];
       } else {
         currentStrokeRef.current = [{ x: worldPos.x, y: worldPos.y }];
@@ -678,7 +741,7 @@ export default function MapCanvas({
 
     // 3. Gestione Disegno a mano libera o Forma Geometrica
     if (isDrawing && role === 'MASTER') {
-      if (activeTool === 'shape') {
+      if (activeTool === 'shape' || isFogTool) {
         currentStrokeRef.current = [currentStrokeRef.current[0], { x: worldPos.x, y: worldPos.y }];
       } else {
         currentStrokeRef.current.push({ x: worldPos.x, y: worldPos.y });
@@ -742,7 +805,12 @@ export default function MapCanvas({
 
 
 
-    if (isDrawing && role === 'MASTER') {
+    // Rettangolo di nebbia rivelato o ricoperto dal Master
+    if (isDrawing && role === 'MASTER' && isFogTool) {
+      setIsDrawing(false);
+      socket?.emit('update-fog', { area: fogAreaFrom(currentStrokeRef.current, room.gridSize, activeTool === 'fog-hide') });
+      currentStrokeRef.current = [];
+    } else if (isDrawing && role === 'MASTER') {
       setIsDrawing(false);
       const minPointsNeeded = activeTool === 'shape' ? 2 : 2;
       if (currentStrokeRef.current.length >= minPointsNeeded && socket) {

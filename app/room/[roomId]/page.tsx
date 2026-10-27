@@ -12,6 +12,7 @@ import ActionLogPanel from '@/components/ActionLogPanel';
 import InitiativePanel from '@/components/InitiativePanel';
 import InvitePanel from '@/components/InvitePanel';
 import { db } from '@/lib/db';
+import { hiddenByFog } from '@/lib/utils';
 import { Shield, KeyRound, ArrowLeft, AlertCircle, Crown, Copy, Check, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -57,7 +58,7 @@ export default function GameRoomPage() {
 
 
   // Toolbar State per il Master
-  const [activeTool, setActiveTool] = useState<'select' | 'pan' | 'brush' | 'eraser' | 'shape'>('select');
+  const [activeTool, setActiveTool] = useState<'select' | 'pan' | 'brush' | 'eraser' | 'shape' | 'fog-reveal' | 'fog-hide'>('select');
   const [activeShape, setActiveShape] = useState<'rectangle' | 'circle'>('rectangle');
   const [brushColor, setBrushColor] = useState<string>('#000000');
   const [brushWidth, setBrushWidth] = useState<number>(5);
@@ -292,6 +293,10 @@ export default function GameRoomPage() {
         if (!prev) return null;
         return { ...prev, backgroundUrl };
       });
+    });
+
+    newSocket.on('fog-updated', (fog) => {
+      setRoom((prev) => (prev ? { ...prev, fog } : null));
     });
 
     newSocket.on('grid-updated', ({ gridSize, gridScale, gridVisible }) => {
@@ -546,7 +551,7 @@ export default function GameRoomPage() {
 
       {/* 3. SIDEBAR LISTA TOKEN IN CAMPO */}
       <TokenList
-        tokens={room.tokens}
+        tokens={role === 'MASTER' ? room.tokens : room.tokens.filter((t) => !hiddenByFog(room.fog, t))}
         role={role}
         roomId={room.id}
         socket={socket}
