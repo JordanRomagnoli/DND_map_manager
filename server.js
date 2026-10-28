@@ -25,6 +25,12 @@ const playerInitiative = (room) =>
     activeTokenId: isHiddenToken(room, room.initiative.activeTokenId) ? '' : room.initiative.activeTokenId,
   };
 const playerEngagements = (room) => (room.engagements || []).filter((pair) => !pair.some((id) => isHiddenToken(room, id)));
+// Elementi della mappa: i giocatori vedono i forzieri (il contenuto solo dopo l'apertura) e le trappole già scattate.
+// Gli inneschi restano sempre del Master.
+const playerFeatures = (room) =>
+  (room.features || [])
+    .filter((f) => f.kind === 'chest' || (f.kind === 'trap' && f.triggered))
+    .map((f) => (f.triggered ? f : { ...f, text: undefined }));
 // i giocatori non vedono l'elenco delle scene preparate dal Master
 const playerView = (room, ownTokenId) => ({
   ...publicRoom(room),
@@ -33,6 +39,7 @@ const playerView = (room, ownTokenId) => ({
   tokens: room.tokens.filter((t) => !t.hidden).map((t) => (t.id === ownTokenId ? t : hideHp(t))),
   initiative: playerInitiative(room),
   engagements: playerEngagements(room),
+  features: playerFeatures(room),
   whispers: (room.whispers || []).filter((w) => w.tokenId === ownTokenId),
   mutedTokenIds: (room.mutedTokenIds || []).filter((id) => id === ownTokenId),
   logs: (room.logs || []).filter((l) => !l.private),
@@ -83,13 +90,15 @@ const switchScene = (room, target) => {
     backgroundUrl: room.backgroundUrl,
     drawings: room.drawings,
     fog: room.fog,
+    features: room.features,
     npcs: room.tokens.filter((t) => t.type === 'npc'),
   });
   room.backgroundUrl = target.backgroundUrl ?? null;
   room.drawings = target.drawings ?? [];
   room.fog = target.fog ?? { enabled: false, areas: [] };
+  room.features = target.features ?? [];
   room.tokens = [...room.tokens.filter((t) => t.type !== 'npc'), ...(target.npcs ?? [])];
-  for (const key of ['backgroundUrl', 'drawings', 'fog', 'npcs']) delete target[key];
+  for (const key of ['backgroundUrl', 'drawings', 'fog', 'features', 'npcs']) delete target[key];
   room.activeSceneId = target.id;
   // gli ingaggi con NPC rimasti nell'altra scena non valgono più
   room.engagements = (room.engagements || []).filter((pair) => pair.every((id) => room.tokens.some((t) => t.id === id)));
@@ -197,6 +206,10 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       io.to(masterRoom(roomId)).emit('initiative-updated', room.initiative);
       io.to(roomId).except(masterRoom(roomId)).emit('initiative-updated', playerInitiative(room));
     };
+    const emitFeatures = (roomId, room) => {
+      io.to(masterRoom(roomId)).emit('features-updated', room.features || []);
+      io.to(roomId).except(masterRoom(roomId)).emit('features-updated', playerFeatures(room));
+    };
     const emitEngagements = (roomId, room) => {
       io.to(masterRoom(roomId)).emit('engagements-updated', room.engagements);
       io.to(roomId).except(masterRoom(roomId)).emit('engagements-updated', playerEngagements(room));
@@ -298,6 +311,7 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
         activeSceneId: 'scena1',
         whispers: [], // sussurri privati tra Master e giocatori, per pedina: { id, tokenId, from, name, text, at }
         mutedTokenIds: [], // pedine dei giocatori che il Master ha silenziato: non possono sussurrare
+        features: [], // trappole, inneschi e forzieri della scena: { id, kind, x, y, name, text, triggered }
       };
 
       rooms.set(cleanRoomId, newRoom);
@@ -454,6 +468,7 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       // Fuori turno (piazzamento, riposizionamento): tutti vedono solo la posizione finale, nessun log
       if (!isTurnMove) {
         io.to(hiddenAudience(roomId, token) || roomId).emit('token-moved', { tokenId, x: token.x, y: token.y });
+        triggerFeatures(roomId, room, token);
         return;
       }
 
@@ -490,7 +505,32 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
         { tokenId, startX: actualStartX, startY: actualStartY, endX: token.x, endY: token.y, gridSteps, metersMoved },
         hiddenAudience(roomId, token)
       );
+      triggerFeatures(roomId, room, token);
     });
+
+    // TRAPPOLE, INNESCHI E FORZIERI: scattano quando una pedina giocatore arriva nel loro quadretto.
+    // Trappola e forziere avvisano tutti; l'innesco solo il Master. Scattano una volta, finché il Master non li riarma.
+    const FEATURE_TEXT = {
+      trap: (who, f) => `${who} fa scattare la trappola "${f.name}"!`,
+      chest: (who, f) => `${who} apre il forziere "${f.name}".`,
+      trigger: (who, f) => `${who} attiva l'innesco "${f.name}".`,
+    };
+    const triggerFeatures = (roomId, room, token) => {
+      if (token.type !== 'player') return;
+      const cell = (v) => Math.floor(v / room.gridSize);
+      const hits = (room.features || []).filter(
+        (f) => !f.triggered && cell(f.x) === cell(token.x) && cell(f.y) === cell(token.y)
+      );
+      if (!hits.length) return;
+      for (const f of hits) {
+        f.triggered = true;
+        const audience = f.kind === 'trigger' ? masterRoom(roomId) : null;
+        const description = FEATURE_TEXT[f.kind](token.name, f) + (f.text ? ` ${f.text}` : '');
+        io.to(audience || roomId).emit('feature-triggered', { feature: f, tokenName: token.name });
+        createAndBroadcastLog(roomId, token.name, 'PLAYER', 'MAP_CHANGE', description, { featureId: f.id }, audience);
+      }
+      emitFeatures(roomId, room);
+    };
 
 
 
@@ -942,6 +982,50 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       room.scenes = room.scenes.filter((s) => s.id !== sceneId);
       io.to(masterRoom(roomId)).emit('scenes-updated', publicRoom(room).scenes);
       callback?.({ success: true });
+    });
+
+    // ELEMENTI DELLA MAPPA (Master only): uno per quadretto, al centro del quadretto
+    const FEATURE_KINDS = ['trap', 'trigger', 'chest'];
+    const FEATURE_NAMES = { trap: 'Trappola', trigger: 'Innesco', chest: 'Forziere' };
+    const MAX_FEATURES = 200;
+    socket.on('add-feature', ({ kind, x, y, name, text } = {}, callback) => {
+      const roomId = socket.roomId;
+      const room = rooms.get(roomId);
+      if (!room || socket.role !== 'MASTER') return callback?.({ success: false, error: 'Solo il Master.' });
+      if (!FEATURE_KINDS.includes(kind) || !Number.isFinite(x) || !Number.isFinite(y)) {
+        return callback?.({ success: false, error: 'Elemento non valido.' });
+      }
+      if (!room.features) room.features = [];
+      if (room.features.length >= MAX_FEATURES) return callback?.({ success: false, error: 'Troppi elementi in questa scena.' });
+      const pos = snapToCellCenter(x, y, room.gridSize);
+      if (room.features.some((f) => f.x === pos.x && f.y === pos.y)) {
+        return callback?.({ success: false, error: "C'è già un elemento in questo quadretto." });
+      }
+
+      const cleanName = typeof name === 'string' ? name.trim().slice(0, 40) : '';
+      const cleanText = typeof text === 'string' ? text.trim().slice(0, 300) : '';
+      room.features.push({
+        id: `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        kind,
+        ...pos,
+        name: cleanName || FEATURE_NAMES[kind],
+        text: cleanText,
+        triggered: false,
+      });
+      emitFeatures(roomId, room);
+      callback?.({ success: true });
+    });
+
+    // Riarma (triggered false) o elimina un elemento
+    socket.on('update-feature', ({ featureId, remove } = {}) => {
+      const roomId = socket.roomId;
+      const room = rooms.get(roomId);
+      if (!room || socket.role !== 'MASTER') return;
+      const feature = (room.features || []).find((f) => f.id === featureId);
+      if (!feature) return;
+      if (remove) room.features = room.features.filter((f) => f !== feature);
+      else feature.triggered = false;
+      emitFeatures(roomId, room);
     });
 
     // SUSSURRI: messaggi privati tra un giocatore e il Master. La conversazione è legata alla pedina del

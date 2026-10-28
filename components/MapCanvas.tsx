@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { RoomState, Token, DrawingStroke, UserRole, FogArea, FogOfWar } from '@/lib/types';
+import { RoomState, Token, DrawingStroke, UserRole, FogArea, FogOfWar, MapFeatureKind } from '@/lib/types';
 import { Socket } from 'socket.io-client';
 import { Plus, Minus, Maximize2, Heart, Shield, Skull, Check, Camera, Upload, Image as ImageIcon, Trash2, Swords, Activity } from 'lucide-react';
-import { sendTokenAvatar, hiddenByFog, CONDITIONS, conditionIcon } from '@/lib/utils';
+import { sendTokenAvatar, hiddenByFog, CONDITIONS, conditionIcon, FEATURES } from '@/lib/utils';
+import FeatureDialog from '@/components/FeatureDialog';
 import { measureShape, cellsInShape, type Measure, type MeasureKind } from '@/lib/measure';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -136,8 +137,9 @@ interface MapCanvasProps {
   role: UserRole;
   myTokenId?: string;
   socket: Socket | null;
-  activeTool: 'select' | 'pan' | 'brush' | 'eraser' | 'shape' | 'fog-reveal' | 'fog-hide' | 'measure';
+  activeTool: 'select' | 'pan' | 'brush' | 'eraser' | 'shape' | 'fog-reveal' | 'fog-hide' | 'measure' | 'feature';
   measureKind?: MeasureKind;
+  featureKind?: MapFeatureKind;
   onAreaTokens?: (tokenIds: string[]) => void; // il Master ha piazzato un'area: le pedine che ci stanno dentro
   activeShape?: 'rectangle' | 'circle';
   brushColor: string;
@@ -153,6 +155,7 @@ export default function MapCanvas({
   activeTool,
   activeShape = 'rectangle',
   measureKind = 'ruler',
+  featureKind = 'trap',
   onAreaTokens,
   brushColor,
   brushWidth,
@@ -274,6 +277,7 @@ export default function MapCanvas({
 
   // Stato Popover HP Token
   const [hpModalToken, setHpModalToken] = useState<Token | null>(null);
+  const [featureCell, setFeatureCell] = useState<{ x: number; y: number } | null>(null);
   const [inputHp, setInputHp] = useState<number>(10);
   const [inputMaxHp, setInputMaxHp] = useState<number>(10);
 
@@ -411,6 +415,26 @@ export default function MapCanvas({
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(layer, 0, 0);
     ctx.restore();
+
+    // 3.1 TRAPPOLE, INNESCHI E FORZIERI, sotto la nebbia e le pedine. Il Master vede in trasparenza,
+    // con un bordo tratteggiato, quelli che i giocatori non vedono.
+    (room.features ?? []).forEach((f) => {
+      const secret = f.kind === 'trigger' || (f.kind === 'trap' && !f.triggered);
+      const size = room.gridSize;
+      ctx.save();
+      ctx.globalAlpha = secret ? 0.6 : f.kind === 'chest' && f.triggered ? 0.55 : 1;
+      if (secret) {
+        ctx.strokeStyle = f.kind === 'trap' ? '#ef4444' : '#a855f7';
+        ctx.lineWidth = 2 / zoom;
+        ctx.setLineDash([5 / zoom, 4 / zoom]);
+        ctx.strokeRect(f.x - size / 2 + 2, f.y - size / 2 + 2, size - 4, size - 4);
+      }
+      ctx.font = `${size * 0.55}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(f.triggered ? FEATURES[f.kind].done : FEATURES[f.kind].icon, f.x, f.y);
+      ctx.restore();
+    });
 
     // 3.2 NEBBIA DI GUERRA: copre tutto tranne le aree rivelate. I giocatori la vedono opaca,
     // il Master in trasparenza per continuare a vedere la mappa. Canvas separato come i disegni.
@@ -830,6 +854,14 @@ export default function MapCanvas({
       }, LONG_PRESS_MS);
     }
 
+    // ELEMENTI (Master): il clic su un quadretto apre la creazione, o la gestione se c'è già qualcosa
+    if (activeTool === 'feature' && role === 'MASTER' && e.button === 0) {
+      const col = Math.floor(worldPos.x / room.gridSize);
+      const row = Math.floor(worldPos.y / room.gridSize);
+      setFeatureCell({ x: (col + 0.5) * room.gridSize, y: (row + 0.5) * room.gridSize });
+      return;
+    }
+
     // MISURA: righello o area d'effetto, per tutti i ruoli
     if (activeTool === 'measure' && e.button === 0) {
       measureDragRef.current = { kind: measureKind, x1: worldPos.x, y1: worldPos.y, x2: worldPos.x, y2: worldPos.y };
@@ -1173,6 +1205,10 @@ export default function MapCanvas({
           <Maximize2 size={15} />
         </button>
       </div>
+
+      {role === 'MASTER' && (
+        <FeatureDialog room={room} socket={socket} cell={featureCell} kind={featureKind} onClose={() => setFeatureCell(null)} />
+      )}
 
       {/* DIALOG POPOVER MODALE HP TOKEN */}
       <Dialog open={!!hpModalToken} onOpenChange={(open) => !open && setHpModalToken(null)}>

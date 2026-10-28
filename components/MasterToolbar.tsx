@@ -24,11 +24,12 @@ import {
   Sun,
   Eye,
   EyeOff,
+  Bomb,
 } from 'lucide-react';
 
-import { RoomState } from '@/lib/types';
+import { MapFeatureKind, RoomState } from '@/lib/types';
 import { Socket } from 'socket.io-client';
-import { cn, resizeImageFile } from '@/lib/utils';
+import { cn, resizeImageFile, FEATURES } from '@/lib/utils';
 import type { MeasureKind } from '@/lib/measure';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -102,10 +103,12 @@ const Divider = () => <div className="w-px self-stretch my-1 bg-white/10 shrink-
 interface MasterToolbarProps {
   room: RoomState;
   socket: Socket | null;
-  activeTool: 'select' | 'pan' | 'brush' | 'eraser' | 'shape' | 'fog-reveal' | 'fog-hide' | 'measure';
-  setActiveTool: (tool: 'select' | 'pan' | 'brush' | 'eraser' | 'shape' | 'fog-reveal' | 'fog-hide' | 'measure') => void;
+  activeTool: 'select' | 'pan' | 'brush' | 'eraser' | 'shape' | 'fog-reveal' | 'fog-hide' | 'measure' | 'feature';
+  setActiveTool: (tool: 'select' | 'pan' | 'brush' | 'eraser' | 'shape' | 'fog-reveal' | 'fog-hide' | 'measure' | 'feature') => void;
   measureKind: MeasureKind;
   setMeasureKind: (kind: MeasureKind) => void;
+  featureKind: MapFeatureKind;
+  setFeatureKind: (kind: MapFeatureKind) => void;
   activeShape: 'rectangle' | 'circle';
   setActiveShape: (shape: 'rectangle' | 'circle') => void;
   brushColor: string;
@@ -123,6 +126,8 @@ export default function MasterToolbar({
   setActiveShape,
   measureKind,
   setMeasureKind,
+  featureKind,
+  setFeatureKind,
   brushColor,
   setBrushColor,
   brushWidth,
@@ -386,6 +391,23 @@ export default function MasterToolbar({
           </div>
         )}
 
+        {activeTool === 'feature' && (
+          <div className="glass-panel flex items-center gap-1.5 px-2 py-1.5 max-w-full overflow-x-auto">
+            {(Object.keys(FEATURES) as MapFeatureKind[]).map((kind) => (
+              <ToolButton
+                key={kind}
+                icon={<span className="text-lg leading-[18px]">{FEATURES[kind].icon}</span>}
+                label={FEATURES[kind].label}
+                active={featureKind === kind}
+                onClick={() => setFeatureKind(kind)}
+              />
+            ))}
+            <span className="hidden md:block max-w-[240px] px-2 text-[11px] leading-snug text-slate-400">
+              Tocca un quadretto per piazzarlo, o uno già piazzato per riarmarlo o eliminarlo. {FEATURES[featureKind].hint}
+            </span>
+          </div>
+        )}
+
         {isFogTool && (
           <div className="glass-panel flex items-center gap-1.5 px-2 py-1.5 max-w-full overflow-x-auto">
             <ToolButton icon={<Eye size={18} />} label="Rivela" active={activeTool === 'fog-reveal'} onClick={() => setActiveTool('fog-reveal')} />
@@ -427,6 +449,13 @@ export default function MasterToolbar({
               active={activeTool === 'measure'}
               onClick={() => setActiveTool('measure')}
               title="Righello e aree d'effetto degli incantesimi"
+            />
+            <ToolButton
+              icon={<Bomb size={20} />}
+              label="Trappole"
+              active={activeTool === 'feature'}
+              onClick={() => setActiveTool('feature')}
+              title="Trappole, inneschi e forzieri che scattano quando un giocatore ci passa sopra"
             />
           </ToolGroup>
 

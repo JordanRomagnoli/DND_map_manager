@@ -890,3 +890,51 @@ test('sussurri: privati tra giocatore e Master; il silenziato non scrive ma legg
   assert.deepEqual(back.room.whispers.map((w) => w.text), ['Io posso']);
   assert.deepEqual(back.room.mutedTokenIds, [], 'lui non è silenziato');
 });
+
+test('trappole, inneschi e forzieri: nascosti ai giocatori finché non ci passa sopra una pedina', async () => {
+  const dm = client();
+  await ack(dm, 'create-room', { roomId: 'trappole', password: 'pw' });
+  const p = client();
+  const { assignedTokenId: heroId, room } = await ack(p, 'join-room', { roomId: 'trappole', password: 'pw', playerName: 'Aria' });
+  const g = room.gridSize;
+  const fired = { dm: [], p: [] };
+  dm.on('feature-triggered', ({ feature }) => fired.dm.push(feature.kind));
+  p.on('feature-triggered', ({ feature }) => fired.p.push(feature.kind));
+  let playerFeatures = [];
+  let dmFeatures = [];
+  p.on('features-updated', (f) => (playerFeatures = f));
+  dm.on('features-updated', (f) => (dmFeatures = f));
+
+  assert.equal((await ack(p, 'add-feature', { kind: 'trap', x: 0, y: 0 })).success, false, 'solo il Master');
+  assert.ok((await ack(dm, 'add-feature', { kind: 'trap', x: g * 1.2, y: g * 0.3, name: 'Fossa', text: 'Cadi per 3 metri.' })).success);
+  assert.equal((await ack(dm, 'add-feature', { kind: 'chest', x: g * 1.7, y: g * 0.9 })).success, false, 'un elemento per quadretto');
+  assert.ok((await ack(dm, 'add-feature', { kind: 'chest', x: g * 2.5, y: g * 0.5, name: 'Baule', text: '50 monete' })).success);
+  assert.ok((await ack(dm, 'add-feature', { kind: 'trigger', x: g * 3.5, y: g * 0.5, name: 'Sala del trono' })).success);
+  await wait(100);
+  assert.deepEqual(playerFeatures.map((f) => [f.kind, f.text]), [['chest', undefined]], 'solo il forziere, chiuso');
+
+  const move = async (col) => {
+    p.emit('move-token-end', { tokenId: heroId, endX: g * (col + 0.5), endY: g * 0.5 });
+    await wait(100);
+  };
+  await move(1);
+  await move(2);
+  await move(3);
+  await move(1); // già scattata: non scatta di nuovo
+  assert.deepEqual(fired.dm, ['trap', 'chest', 'trigger']);
+  assert.deepEqual(fired.p, ['trap', 'chest'], "l'innesco lo sa solo il Master");
+  assert.deepEqual(
+    playerFeatures.map((f) => [f.kind, f.text]),
+    [['trap', 'Cadi per 3 metri.'], ['chest', '50 monete']]
+  );
+
+  // il Master riarma la trappola ed elimina il forziere
+  const [trap, chest] = dmFeatures;
+  dm.emit('update-feature', { featureId: trap.id });
+  dm.emit('update-feature', { featureId: chest.id, remove: true });
+  await wait(100);
+  assert.deepEqual(playerFeatures, [], 'trappola di nuovo nascosta, forziere sparito');
+  await move(2);
+  await move(1);
+  assert.deepEqual(fired.p, ['trap', 'chest', 'trap']);
+});

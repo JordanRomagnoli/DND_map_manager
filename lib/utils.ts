@@ -1,7 +1,7 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import type { Socket } from 'socket.io-client';
-import type { FogOfWar, Token } from './types';
+import type { FogOfWar, MapFeatureKind, Token } from './types';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -117,6 +117,13 @@ export const CONDITIONS = [
   { name: 'Concentrazione', icon: '🧠' },
   { name: 'Esausto', icon: '🥱' },
 ];
+// Trappole, inneschi e forzieri: nome e icona, prima e dopo lo scatto
+export const FEATURES: Record<MapFeatureKind, { label: string; icon: string; done: string; hint: string }> = {
+  trap: { label: 'Trappola', icon: '🪤', done: '💥', hint: 'Invisibile finché un giocatore non ci passa sopra. Il testo arriva a tutti quando scatta.' },
+  trigger: { label: 'Innesco', icon: '⚡', done: '⚡', hint: 'Sempre invisibile ai giocatori: quando ci passa qualcuno avvisa solo te.' },
+  chest: { label: 'Forziere', icon: '🧰', done: '💰', hint: 'Visibile a tutti; il contenuto si scopre quando un giocatore lo raggiunge.' },
+};
+
 export const conditionIcon = (name: string) => CONDITIONS.find((c) => c.name === name)?.icon ?? '❔';
 
 // Il punto è sotto la nebbia? Vince l'ultima area che lo contiene; fuori da ogni area è coperto

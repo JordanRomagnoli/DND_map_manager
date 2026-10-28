@@ -81,6 +81,19 @@ export interface Whisper {
   at: number;
 }
 
+// Elemento della mappa piazzato dal Master al centro di un quadretto. Scatta quando ci arriva una pedina giocatore.
+// text: effetto della trappola, contenuto del forziere o nota dell'innesco (ai giocatori dopo lo scatto, mai per l'innesco)
+export type MapFeatureKind = 'trap' | 'trigger' | 'chest';
+export interface MapFeature {
+  id: string;
+  kind: MapFeatureKind;
+  x: number;
+  y: number;
+  name: string;
+  text?: string;
+  triggered: boolean;
+}
+
 // Combattimento a iniziativa: entries già ordinate dal server (valore più alto prima)
 export interface Initiative {
   entries: { tokenId: string; value: number }[];
@@ -107,4 +120,5 @@ export interface RoomState {
   activeSceneId?: string;
   whispers?: Whisper[]; // il giocatore riceve solo i propri
   mutedTokenIds?: string[]; // giocatori silenziati dal Master (al giocatore arriva solo se è lui)
+  features?: MapFeature[]; // ai giocatori solo forzieri e trappole scattate
 }
