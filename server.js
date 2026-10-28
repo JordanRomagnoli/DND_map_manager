@@ -33,6 +33,8 @@ const playerView = (room, ownTokenId) => ({
   tokens: room.tokens.filter((t) => !t.hidden).map((t) => (t.id === ownTokenId ? t : hideHp(t))),
   initiative: playerInitiative(room),
   engagements: playerEngagements(room),
+  whispers: (room.whispers || []).filter((w) => w.tokenId === ownTokenId),
+  mutedTokenIds: (room.mutedTokenIds || []).filter((id) => id === ownTokenId),
   logs: (room.logs || []).filter((l) => !l.private),
 });
 
@@ -294,6 +296,8 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
         fog: { enabled: false, areas: [] }, // nebbia di guerra: aree { x, y, w, h, hide } applicate in ordine
         scenes: [{ id: 'scena1', name: 'Scena 1' }], // vedi switchScene
         activeSceneId: 'scena1',
+        whispers: [], // sussurri privati tra Master e giocatori, per pedina: { id, tokenId, from, name, text, at }
+        mutedTokenIds: [], // pedine dei giocatori che il Master ha silenziato: non possono sussurrare
       };
 
       rooms.set(cleanRoomId, newRoom);
@@ -938,6 +942,60 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       room.scenes = room.scenes.filter((s) => s.id !== sceneId);
       io.to(masterRoom(roomId)).emit('scenes-updated', publicRoom(room).scenes);
       callback?.({ success: true });
+    });
+
+    // SUSSURRI: messaggi privati tra un giocatore e il Master. La conversazione è legata alla pedina del
+    // giocatore (la ritrova da qualsiasi dispositivo); il Master risponde indicando la pedina (toTokenId).
+    // Un giocatore silenziato dal Master non può scrivere, ma continua a ricevere le risposte.
+    const MAX_WHISPERS = 300;
+    socket.on('whisper', ({ text, toTokenId } = {}, callback) => {
+      const roomId = socket.roomId;
+      const room = rooms.get(roomId);
+      if (!room) return callback?.({ success: false, error: 'Stanza non trovata.' });
+      const clean = typeof text === 'string' ? text.trim().slice(0, 500) : '';
+      if (!clean) return callback?.({ success: false, error: 'Messaggio vuoto.' });
+
+      const isMaster = socket.role === 'MASTER';
+      const tokenId = isMaster ? toTokenId : socket.tokenId;
+      const token = room.tokens.find((t) => t.id === tokenId && t.type === 'player');
+      if (!token) return callback?.({ success: false, error: 'Giocatore non trovato.' });
+      if (!isMaster && room.mutedTokenIds?.includes(tokenId)) {
+        return callback?.({ success: false, error: 'Il Master ti ha silenziato.' });
+      }
+      const now = Date.now();
+      if (!isMaster && now - (socket.lastWhisperAt || 0) < 500) {
+        return callback?.({ success: false, error: 'Aspetta un attimo prima di scrivere ancora.' });
+      }
+      socket.lastWhisperAt = now;
+
+      const whisper = {
+        id: `w-${now}-${Math.random().toString(36).slice(2, 6)}`,
+        tokenId,
+        from: isMaster ? 'MASTER' : 'PLAYER',
+        name: isMaster ? 'Master' : socket.playerName || token.name,
+        text: clean,
+        at: now,
+      };
+      if (!room.whispers) room.whispers = [];
+      room.whispers.push(whisper);
+      if (room.whispers.length > MAX_WHISPERS) room.whispers.shift();
+
+      io.to([masterRoom(roomId), token.ownerId].filter(Boolean)).emit('whispered', whisper);
+      callback?.({ success: true });
+    });
+
+    // SILENZIA / RIATTIVA GIOCATORE (Master only)
+    socket.on('set-player-muted', ({ tokenId, muted } = {}) => {
+      const roomId = socket.roomId;
+      const room = rooms.get(roomId);
+      if (!room || socket.role !== 'MASTER') return;
+      const token = room.tokens.find((t) => t.id === tokenId && t.type === 'player');
+      if (!token) return;
+
+      const others = (room.mutedTokenIds || []).filter((id) => id !== tokenId);
+      room.mutedTokenIds = muted ? [...others, tokenId] : others;
+      io.to(masterRoom(roomId)).emit('muted-updated', room.mutedTokenIds);
+      if (token.ownerId) io.to(token.ownerId).emit('muted-updated', muted ? [tokenId] : []);
     });
 
     // TRATTI DI DISEGNO (Master only)

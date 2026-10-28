@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
-import { RoomState, UserRole, Token, ActionLogRecord, Initiative } from '@/lib/types';
+import { RoomState, UserRole, Token, ActionLogRecord, Initiative, Whisper } from '@/lib/types';
 import MapCanvas from '@/components/MapCanvas';
 import MasterToolbar from '@/components/MasterToolbar';
 import PlayerToolbar from '@/components/PlayerToolbar';
@@ -13,6 +13,7 @@ import InitiativePanel from '@/components/InitiativePanel';
 import InvitePanel from '@/components/InvitePanel';
 import HandoutViewer from '@/components/HandoutViewer';
 import TurnAlert from '@/components/TurnAlert';
+import WhisperPanel from '@/components/WhisperPanel';
 import { db } from '@/lib/db';
 import { hiddenByFog } from '@/lib/utils';
 import type { MeasureKind } from '@/lib/measure';
@@ -315,6 +316,14 @@ export default function GameRoomPage() {
     // Cambio di scena: la stanza arriva intera (mappa, disegni, nebbia e pedine della nuova scena)
     newSocket.on('room-reloaded', (newRoom: RoomState) => setRoom(newRoom));
 
+    newSocket.on('whispered', (whisper: Whisper) => {
+      setRoom((prev) => (prev ? { ...prev, whispers: [...(prev.whispers ?? []), whisper] } : null));
+    });
+
+    newSocket.on('muted-updated', (mutedTokenIds: string[]) => {
+      setRoom((prev) => (prev ? { ...prev, mutedTokenIds } : null));
+    });
+
     newSocket.on('scenes-updated', (scenes: RoomState['scenes']) => {
       setRoom((prev) => (prev ? { ...prev, scenes } : null));
     });
@@ -529,6 +538,9 @@ export default function GameRoomPage() {
 
         {/* Combattimento a iniziativa: ordine dei turni */}
         <InitiativePanel room={room} role={role} socket={socket} myTokenId={myTokenId} />
+
+        {/* Sussurri privati tra giocatori e Master */}
+        <WhisperPanel room={room} role={role} socket={socket} myTokenId={myTokenId} />
       </header>
 
 

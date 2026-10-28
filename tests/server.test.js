@@ -847,3 +847,46 @@ test('danni e cure di gruppo: solo il Master, HP tra 0 e il massimo, visibili so
   assert.deepEqual([hp[b.id], hp[heroId]], [20, 20], 'mai sopra il massimo');
   assert.deepEqual([...new Set(seenByPlayer)], [heroId], 'il giocatore vede solo i propri HP');
 });
+
+test('sussurri: privati tra giocatore e Master; il silenziato non scrive ma legge', async () => {
+  const dm = client();
+  await ack(dm, 'create-room', { roomId: 'sussurri', password: 'pw' });
+  const a = client();
+  const b = client();
+  const { assignedTokenId: aId } = await ack(a, 'join-room', { roomId: 'sussurri', password: 'pw', playerName: 'Ladra' });
+  const { assignedTokenId: bId } = await ack(b, 'join-room', { roomId: 'sussurri', password: 'pw', playerName: 'Paladino', newCharacter: true });
+  const seen = { dm: [], a: [], b: [] };
+  dm.on('whispered', (w) => seen.dm.push(w.text));
+  a.on('whispered', (w) => seen.a.push(w.text));
+  b.on('whispered', (w) => seen.b.push(w.text));
+
+  assert.ok((await ack(a, 'whisper', { text: '  Rubo la borsa del mercante  ' })).success);
+  assert.ok((await ack(dm, 'whisper', { text: 'Tira Rapidità di mano', toTokenId: aId })).success);
+  await wait(100);
+  assert.deepEqual(seen.dm, ['Rubo la borsa del mercante', 'Tira Rapidità di mano']);
+  assert.deepEqual(seen.a, ['Rubo la borsa del mercante', 'Tira Rapidità di mano']);
+  assert.deepEqual(seen.b, [], "l'altro giocatore non legge");
+
+  // silenziato: non scrive, ma riceve le risposte del Master
+  let mutedForA = null;
+  a.on('muted-updated', (ids) => (mutedForA = ids));
+  b.emit('set-player-muted', { tokenId: aId, muted: true }); // un giocatore non può silenziare
+  await wait(100);
+  assert.equal(mutedForA, null);
+  dm.emit('set-player-muted', { tokenId: aId, muted: true });
+  await wait(100);
+  assert.deepEqual(mutedForA, [aId]);
+  await wait(500); // oltre il limite di un messaggio ogni mezzo secondo
+  const blocked = await ack(a, 'whisper', { text: 'Ehi!' });
+  assert.equal(blocked.success, false);
+  assert.ok((await ack(dm, 'whisper', { text: 'Silenzio, per ora', toTokenId: aId })).success);
+  assert.ok((await ack(b, 'whisper', { text: 'Io posso' })).success, 'gli altri scrivono ancora');
+
+  // rientrando da un altro dispositivo il Paladino ritrova solo la propria conversazione
+  b.disconnect();
+  await wait(100);
+  const back = await ack(client(), 'join-room', { roomId: 'sussurri', password: 'pw', playerName: 'Paladino', claimTokenId: bId });
+  assert.ok(back.success);
+  assert.deepEqual(back.room.whispers.map((w) => w.text), ['Io posso']);
+  assert.deepEqual(back.room.mutedTokenIds, [], 'lui non è silenziato');
+});

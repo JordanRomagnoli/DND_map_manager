@@ -71,6 +71,16 @@ export interface FogOfWar {
   areas: FogArea[];
 }
 
+// Sussurro privato tra un giocatore e il Master; tokenId = pedina del giocatore (la conversazione)
+export interface Whisper {
+  id: string;
+  tokenId: string;
+  from: UserRole;
+  name: string;
+  text: string;
+  at: number;
+}
+
 // Combattimento a iniziativa: entries già ordinate dal server (valore più alto prima)
 export interface Initiative {
   entries: { tokenId: string; value: number }[];
@@ -95,4 +105,6 @@ export interface RoomState {
   fog?: FogOfWar; // assente nelle stanze create prima della nebbia = spenta
   scenes?: { id: string; name: string }[]; // solo per il Master: le mappe preparate (il contenuto resta sul server)
   activeSceneId?: string;
+  whispers?: Whisper[]; // il giocatore riceve solo i propri
+  mutedTokenIds?: string[]; // giocatori silenziati dal Master (al giocatore arriva solo se è lui)
 }
