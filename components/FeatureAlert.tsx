@@ -10,6 +10,7 @@ const STYLES = {
   trap: 'bg-red-600 border-red-300 shadow-red-500/40 text-white',
   chest: 'bg-amber-400 border-amber-200 shadow-amber-500/40 text-slate-950',
   trigger: 'bg-violet-600 border-violet-300 shadow-violet-500/40 text-white',
+  door: 'bg-slate-700 border-slate-400 text-white', // le porte non scattano: qui solo per completezza del tipo
 };
 
 // Avviso quando scatta una trappola, si apre un forziere o (solo per il Master) si attiva un innesco.

@@ -122,6 +122,12 @@ export const FEATURES: Record<MapFeatureKind, { label: string; icon: string; don
   trap: { label: 'Trappola', icon: '🪤', done: '💥', hint: 'Invisibile finché un giocatore non ci passa sopra. Il testo arriva a tutti quando scatta.' },
   trigger: { label: 'Innesco', icon: '⚡', done: '⚡', hint: 'Sempre invisibile ai giocatori: quando ci passa qualcuno avvisa solo te.' },
   chest: { label: 'Forziere', icon: '🧰', done: '💰', hint: 'Visibile a tutti; il contenuto si scopre quando un giocatore lo raggiunge.' },
+  door: {
+    label: 'Porta',
+    icon: '🚪',
+    done: '🚪',
+    hint: "Trascina dalla porta all'angolo opposto della stanza: la stanza si copre subito di nebbia e si scopre quando apri la porta. Con Seleziona, un clic o un tocco sulla porta la apre o la chiude.",
+  },
 };
 
 export const conditionIcon = (name: string) => CONDITIONS.find((c) => c.name === name)?.icon ?? '❔';

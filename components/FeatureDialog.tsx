@@ -13,18 +13,20 @@ const STATUS: Record<MapFeatureKind, [string, string]> = {
   trap: ['pronta a scattare', 'già scattata'],
   trigger: ['pronto a scattare', 'già attivato'],
   chest: ['ancora chiuso', 'già aperto'],
+  door: ['chiusa', 'aperta'],
 };
 
 interface FeatureDialogProps {
   room: RoomState;
   socket: Socket | null;
   cell: { x: number; y: number } | null; // centro del quadretto cliccato dal Master
+  reveal?: { x: number; y: number; w: number; h: number }; // porta: stanza trascinata dal Master
   kind: MapFeatureKind;
   onClose: () => void;
 }
 
 // Master: nel quadretto vuoto crea una trappola, un innesco o un forziere; su uno esistente lo riarma o lo elimina
-export default function FeatureDialog({ room, socket, cell, kind, onClose }: FeatureDialogProps) {
+export default function FeatureDialog({ room, socket, cell, reveal, kind, onClose }: FeatureDialogProps) {
   const [newKind, setNewKind] = useState<MapFeatureKind>(kind);
   const [name, setName] = useState('');
   const [text, setText] = useState('');
@@ -43,14 +45,14 @@ export default function FeatureDialog({ room, socket, cell, kind, onClose }: Fea
   const create = (e: React.FormEvent) => {
     e.preventDefault();
     if (!cell) return;
-    socket?.emit('add-feature', { kind: newKind, ...cell, name, text }, (res: { success: boolean; error?: string }) => {
+    socket?.emit('add-feature', { kind: newKind, ...cell, name, text, reveal }, (res: { success: boolean; error?: string }) => {
       if (res?.success) onClose();
       else setError(res?.error || 'Elemento non creato.');
     });
   };
 
-  const update = (remove: boolean) => {
-    if (existing) socket?.emit('update-feature', { featureId: existing.id, remove });
+  const update = (change: { remove?: boolean; open?: boolean }) => {
+    if (existing) socket?.emit('update-feature', { featureId: existing.id, ...change });
     onClose();
   };
 
@@ -69,12 +71,21 @@ export default function FeatureDialog({ room, socket, cell, kind, onClose }: Fea
             </DialogHeader>
             {existing.text && <p className="text-sm text-slate-200 whitespace-pre-wrap">{existing.text}</p>}
             <div className="flex gap-2">
-              {existing.triggered && (
-                <Button onClick={() => update(false)} className="flex-1 gap-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950">
-                  <RotateCcw className="w-4 h-4" /> Riarma
+              {existing.kind === 'door' ? (
+                <Button
+                  onClick={() => update({ open: !existing.triggered })}
+                  className="flex-1 gap-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950"
+                >
+                  {existing.triggered ? 'Chiudi porta' : 'Apri porta'}
                 </Button>
+              ) : (
+                existing.triggered && (
+                  <Button onClick={() => update({})} className="flex-1 gap-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950">
+                    <RotateCcw className="w-4 h-4" /> Riarma
+                  </Button>
+                )
               )}
-              <Button onClick={() => update(true)} variant="outline" className="flex-1 gap-1.5 border-red-500/40 text-red-300 hover:bg-red-950/40">
+              <Button onClick={() => update({ remove: true })} variant="outline" className="flex-1 gap-1.5 border-red-500/40 text-red-300 hover:bg-red-950/40">
                 <Trash2 className="w-4 h-4" /> Elimina
               </Button>
             </div>
@@ -85,7 +96,7 @@ export default function FeatureDialog({ room, socket, cell, kind, onClose }: Fea
               <DialogTitle className="text-xl font-bold rpg-font text-amber-200">Nuovo elemento</DialogTitle>
               <DialogDescription className="text-xs text-slate-400">{FEATURES[newKind].hint}</DialogDescription>
             </DialogHeader>
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-4 gap-1.5">
               {(Object.keys(FEATURES) as MapFeatureKind[]).map((k) => (
                 <button
                   key={k}
@@ -105,11 +116,16 @@ export default function FeatureDialog({ room, socket, cell, kind, onClose }: Fea
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={40}
-              placeholder={`Nome (es. ${newKind === 'trap' ? 'Fossa nascosta' : newKind === 'chest' ? 'Baule del capitano' : 'Sala del trono'})`}
+              placeholder={`Nome (es. ${{ trap: 'Fossa nascosta', chest: 'Baule del capitano', trigger: 'Sala del trono', door: 'Porta della cripta' }[newKind]})`}
               aria-label="Nome"
               className="bg-slate-950 border-slate-700"
             />
-            <textarea
+            {newKind === 'door' && !reveal && (
+              <p className="text-[11px] text-amber-300/80">
+                Nessuna stanza collegata: per scoprirne una all'apertura, chiudi e trascina dalla porta all'angolo opposto.
+              </p>
+            )}
+            {newKind !== 'door' && <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
               maxLength={300}
@@ -123,7 +139,7 @@ export default function FeatureDialog({ room, socket, cell, kind, onClose }: Fea
               }
               aria-label="Testo"
               className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-amber-400 resize-none"
-            />
+            />}
             {error && <p className="text-xs text-red-400">{error}</p>}
             <Button type="submit" className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold">
               Piazza {FEATURES[newKind].label.toLowerCase()}

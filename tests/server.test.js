@@ -938,3 +938,114 @@ test('trappole, inneschi e forzieri: nascosti ai giocatori finché non ci passa 
   await move(1);
   assert.deepEqual(fired.p, ['trap', 'chest', 'trap']);
 });
+
+test('votazione: i giocatori votano e cambiano idea, il voto segreto nasconde chi ha votato cosa', async () => {
+  const dm = client();
+  await ack(dm, 'create-room', { roomId: 'voto', password: 'pw' });
+  const a = client();
+  const b = client();
+  const { assignedTokenId: aId } = await ack(a, 'join-room', { roomId: 'voto', password: 'pw', playerName: 'Aria' });
+  const { assignedTokenId: bId } = await ack(b, 'join-room', { roomId: 'voto', password: 'pw', playerName: 'Bruno', newCharacter: true });
+  const last = {};
+  for (const [name, s] of Object.entries({ dm, a, b })) s.on('poll-updated', (p) => (last[name] = p));
+
+  assert.equal((await ack(a, 'start-poll', { question: 'Strada?', options: ['A', 'B'] })).success, false, 'solo il Master');
+  assert.equal((await ack(dm, 'start-poll', { question: 'Strada?', options: ['Bosco', ' '] })).success, false, 'almeno due risposte');
+  assert.ok((await ack(dm, 'start-poll', { question: 'Quale strada?', options: ['Bosco', 'Palude', 'Montagna'], secret: true })).success);
+  await wait(100);
+  const pollId = last.a.id;
+  a.emit('vote', { pollId, option: 0 });
+  b.emit('vote', { pollId, option: 0 });
+  a.emit('vote', { pollId, option: 2 }); // cambia idea
+  b.emit('vote', { pollId, option: 9 }); // risposta inesistente: ignorata
+  await wait(150);
+  assert.deepEqual(last.dm.counts, [1, 0, 1]);
+  assert.deepEqual(last.dm.votes, { [aId]: 2, [bId]: 0 }, 'il Master vede tutto');
+  assert.deepEqual(last.b.votes, { [bId]: 0 }, 'voto segreto: solo il proprio');
+
+  dm.emit('update-poll', { secret: false });
+  await wait(100);
+  assert.deepEqual(last.b.votes, { [aId]: 2, [bId]: 0 });
+
+  dm.emit('update-poll', { closed: true });
+  await wait(100);
+  b.emit('vote', { pollId, option: 1 }); // chiusa: non cambia più
+  await wait(100);
+  assert.equal(last.b.closed, true);
+  assert.deepEqual(last.b.counts, [1, 0, 1]);
+
+  dm.emit('update-poll', { remove: true });
+  await wait(100);
+  assert.equal(last.a, null);
+});
+
+test("atmosfera ed effetti: solo il Master, arrivano a tutti, l'atmosfera resta nella sua scena", async () => {
+  const dm = client();
+  await ack(dm, 'create-room', { roomId: 'meteo', password: 'pw' });
+  const p = client();
+  await ack(p, 'join-room', { roomId: 'meteo', password: 'pw', playerName: 'Aria' });
+  const got = { ambience: [], effects: [] };
+  p.on('ambience-updated', (a) => got.ambience.push(a));
+  p.on('map-effect', (e) => got.effects.push(e.kind));
+
+  p.emit('set-ambience', { weather: 'snow' }); // un giocatore non può
+  p.emit('map-effect', { kind: 'shake' });
+  dm.emit('set-ambience', { weather: 'rain' });
+  dm.emit('set-ambience', { light: 'night', weather: 'grandine' }); // meteo sconosciuto: resta la pioggia
+  dm.emit('map-effect', { kind: 'lightning' });
+  dm.emit('map-effect', { kind: 'shake' }); // troppo presto dopo il fulmine
+  await wait(100);
+  assert.deepEqual(got.ambience, [{ weather: 'rain', light: 'day' }, { weather: 'rain', light: 'night' }]);
+  assert.deepEqual(got.effects, ['lightning']);
+
+  // una nuova scena parte senza atmosfera; tornando indietro ritrova pioggia e notte
+  const reloads = [];
+  p.on('room-reloaded', (r) => reloads.push(r.ambience));
+  let dmRoom;
+  dm.on('room-reloaded', (r) => (dmRoom = r));
+  await ack(dm, 'create-scene', { name: 'Taverna' });
+  await ack(dm, 'switch-scene', { sceneId: dmRoom.scenes[0].id });
+  await wait(100);
+  assert.deepEqual(reloads, [null, { weather: 'rain', light: 'night' }]);
+});
+
+test('porte: visibili a tutti, le apre solo il Master e aprendole scoprono la stanza dalla nebbia', async () => {
+  const dm = client();
+  await ack(dm, 'create-room', { roomId: 'porte', password: 'pw' });
+  const p = client();
+  const { assignedTokenId: heroId, room } = await ack(p, 'join-room', { roomId: 'porte', password: 'pw', playerName: 'Aria' });
+  const g = room.gridSize;
+  let playerFeatures = [];
+  let dmFeatures = [];
+  let fog = null;
+  p.on('features-updated', (f) => (playerFeatures = f));
+  dm.on('features-updated', (f) => (dmFeatures = f));
+  p.on('fog-updated', (f) => (fog = f));
+
+  // nebbia spenta: piazzando la porta si accende, tutto scoperto tranne la stanza
+  const stanza = { x: g * 4, y: 0, w: g * 3, h: g * 2 };
+  assert.ok((await ack(dm, 'add-feature', { kind: 'door', x: g * 4.5, y: g * 0.5, name: 'Cripta', reveal: stanza })).success);
+  await wait(100);
+  assert.equal(playerFeatures[0].kind, 'door');
+  assert.equal(playerFeatures[0].reveal, undefined, 'la stanza dietro la porta non arriva ai giocatori');
+  assert.equal(fog.enabled, true);
+  assert.deepEqual(fog.areas.slice(1), [{ ...stanza, hide: true }, { x: g * 4, y: 0, w: g, h: g, hide: false }], 'la porta resta visibile');
+  assert.equal(fog.areas[0].hide, false, 'il resto della mappa resta scoperto');
+
+  // passarci sopra non apre la porta; un giocatore non può aprirla
+  p.emit('move-token-end', { tokenId: heroId, endX: g * 4.5, endY: g * 0.5 });
+  p.emit('update-feature', { featureId: dmFeatures[0].id, open: true });
+  await wait(100);
+  assert.equal(playerFeatures[0].triggered, false);
+
+  dm.emit('update-feature', { featureId: dmFeatures[0].id, open: true });
+  await wait(100);
+  assert.equal(playerFeatures[0].triggered, true);
+  assert.deepEqual(fog.areas.at(-1), { ...stanza, hide: false });
+
+  // richiusa: la stanza resta scoperta
+  dm.emit('update-feature', { featureId: dmFeatures[0].id, open: false });
+  await wait(100);
+  assert.equal(playerFeatures[0].triggered, false);
+  assert.equal(fog.areas.length, 4);
+});

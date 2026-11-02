@@ -10,7 +10,21 @@ const { createRoomStore } = require('./persistence');
 const publicRoom = ({ password, masterKey, masterPassword, playerKeys, scenes, ...room }) => ({
   ...room,
   scenes: (scenes || []).map(({ id, name }) => ({ id, name })),
+  poll: publicPoll(room.poll),
 });
+
+// Votazione: tutti ricevono il conteggio per risposta. Chi ha votato cosa lo vede il Master (viewerTokenId
+// assente) e, se il voto non è segreto, anche i giocatori; altrimenti ognuno riceve solo il proprio voto.
+function publicPoll(poll, viewerTokenId) {
+  if (!poll) return null;
+  const { votes, ...rest } = poll;
+  const counts = poll.options.map((_, i) => Object.values(votes).filter((v) => v === i).length);
+  const visible =
+    viewerTokenId === undefined || !poll.secret
+      ? votes
+      : Object.fromEntries(Object.entries(votes).filter(([id]) => id === viewerTokenId));
+  return { ...rest, counts, votes: visible };
+}
 
 // Gli HP li vedono solo il Master e il proprietario della pedina: il server non li invia agli altri
 const masterRoom = (roomId) => `${roomId}:master`;
@@ -25,12 +39,12 @@ const playerInitiative = (room) =>
     activeTokenId: isHiddenToken(room, room.initiative.activeTokenId) ? '' : room.initiative.activeTokenId,
   };
 const playerEngagements = (room) => (room.engagements || []).filter((pair) => !pair.some((id) => isHiddenToken(room, id)));
-// Elementi della mappa: i giocatori vedono i forzieri (il contenuto solo dopo l'apertura) e le trappole già scattate.
-// Gli inneschi restano sempre del Master.
+// Elementi della mappa: i giocatori vedono porte e forzieri (il contenuto solo dopo l'apertura) e le trappole
+// già scattate. Gli inneschi restano sempre del Master, come la stanza dietro le porte.
 const playerFeatures = (room) =>
   (room.features || [])
-    .filter((f) => f.kind === 'chest' || (f.kind === 'trap' && f.triggered))
-    .map((f) => (f.triggered ? f : { ...f, text: undefined }));
+    .filter((f) => f.kind === 'chest' || f.kind === 'door' || (f.kind === 'trap' && f.triggered))
+    .map(({ reveal, ...f }) => (f.triggered ? f : { ...f, text: undefined }));
 // i giocatori non vedono l'elenco delle scene preparate dal Master
 const playerView = (room, ownTokenId) => ({
   ...publicRoom(room),
@@ -40,6 +54,7 @@ const playerView = (room, ownTokenId) => ({
   initiative: playerInitiative(room),
   engagements: playerEngagements(room),
   features: playerFeatures(room),
+  poll: publicPoll(room.poll, ownTokenId ?? ''),
   whispers: (room.whispers || []).filter((w) => w.tokenId === ownTokenId),
   mutedTokenIds: (room.mutedTokenIds || []).filter((id) => id === ownTokenId),
   logs: (room.logs || []).filter((l) => !l.private),
@@ -91,14 +106,16 @@ const switchScene = (room, target) => {
     drawings: room.drawings,
     fog: room.fog,
     features: room.features,
+    ambience: room.ambience,
     npcs: room.tokens.filter((t) => t.type === 'npc'),
   });
   room.backgroundUrl = target.backgroundUrl ?? null;
   room.drawings = target.drawings ?? [];
   room.fog = target.fog ?? { enabled: false, areas: [] };
   room.features = target.features ?? [];
+  room.ambience = target.ambience ?? null;
   room.tokens = [...room.tokens.filter((t) => t.type !== 'npc'), ...(target.npcs ?? [])];
-  for (const key of ['backgroundUrl', 'drawings', 'fog', 'features', 'npcs']) delete target[key];
+  for (const key of ['backgroundUrl', 'drawings', 'fog', 'features', 'ambience', 'npcs']) delete target[key];
   room.activeSceneId = target.id;
   // gli ingaggi con NPC rimasti nell'altra scena non valgono più
   room.engagements = (room.engagements || []).filter((pair) => pair.every((id) => room.tokens.some((t) => t.id === id)));
@@ -519,7 +536,7 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       if (token.type !== 'player') return;
       const cell = (v) => Math.floor(v / room.gridSize);
       const hits = (room.features || []).filter(
-        (f) => !f.triggered && cell(f.x) === cell(token.x) && cell(f.y) === cell(token.y)
+        (f) => f.kind !== 'door' && !f.triggered && cell(f.x) === cell(token.x) && cell(f.y) === cell(token.y)
       );
       if (!hits.length) return;
       for (const f of hits) {
@@ -984,11 +1001,13 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       callback?.({ success: true });
     });
 
-    // ELEMENTI DELLA MAPPA (Master only): uno per quadretto, al centro del quadretto
-    const FEATURE_KINDS = ['trap', 'trigger', 'chest'];
-    const FEATURE_NAMES = { trap: 'Trappola', trigger: 'Innesco', chest: 'Forziere' };
+    // ELEMENTI DELLA MAPPA (Master only): uno per quadretto, al centro del quadretto.
+    // Le porte non scattano da sole: le apre il Master, e aprendole scopre dalla nebbia la stanza (reveal).
+    const FEATURE_KINDS = ['trap', 'trigger', 'chest', 'door'];
+    const FEATURE_NAMES = { trap: 'Trappola', trigger: 'Innesco', chest: 'Forziere', door: 'Porta' };
+    const validArea = (a) => a && ['x', 'y', 'w', 'h'].every((k) => Number.isFinite(a[k])) && a.w > 0 && a.h > 0;
     const MAX_FEATURES = 200;
-    socket.on('add-feature', ({ kind, x, y, name, text } = {}, callback) => {
+    socket.on('add-feature', ({ kind, x, y, name, text, reveal } = {}, callback) => {
       const roomId = socket.roomId;
       const room = rooms.get(roomId);
       if (!room || socket.role !== 'MASTER') return callback?.({ success: false, error: 'Solo il Master.' });
@@ -1011,21 +1030,139 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
         name: cleanName || FEATURE_NAMES[kind],
         text: cleanText,
         triggered: false,
+        ...(kind === 'door' && validArea(reveal) && { reveal: { x: reveal.x, y: reveal.y, w: reveal.w, h: reveal.h } }),
       });
+      if (room.features.at(-1).reveal) coverRoom(roomId, room, room.features.at(-1));
       emitFeatures(roomId, room);
       callback?.({ success: true });
     });
 
-    // Riarma (triggered false) o elimina un elemento
-    socket.on('update-feature', ({ featureId, remove } = {}) => {
+    // Riarma (triggered false) o elimina un elemento; open apre o chiude una porta
+    socket.on('update-feature', ({ featureId, remove, open } = {}) => {
       const roomId = socket.roomId;
       const room = rooms.get(roomId);
       if (!room || socket.role !== 'MASTER') return;
       const feature = (room.features || []).find((f) => f.id === featureId);
       if (!feature) return;
       if (remove) room.features = room.features.filter((f) => f !== feature);
+      else if (feature.kind === 'door' && typeof open === 'boolean') return toggleDoor(roomId, room, feature, open);
       else feature.triggered = false;
       emitFeatures(roomId, room);
+    });
+
+    // La stanza dietro una porta nuova si copre subito di nebbia (tranne il quadretto della porta, che si vede),
+    // il resto della mappa resta com'è: se la nebbia era spenta si accende con tutto scoperto tranne la stanza
+    const WHOLE_MAP = { x: -1e6, y: -1e6, w: 2e6, h: 2e6, hide: false };
+    const coverRoom = (roomId, room, door) => {
+      if (!room.fog) room.fog = { enabled: false, areas: [] };
+      if (!room.fog.enabled) room.fog = { enabled: true, areas: [WHOLE_MAP] };
+      if (room.fog.areas.length + 2 > MAX_FOG_AREAS) return;
+      const g = room.gridSize;
+      room.fog.areas.push({ ...door.reveal, hide: true }, { x: door.x - g / 2, y: door.y - g / 2, w: g, h: g, hide: false });
+      io.to(roomId).emit('fog-updated', room.fog);
+    };
+
+    // Aprendo una porta la sua stanza si scopre dalla nebbia; richiudendola resta scoperta (i giocatori l'hanno vista)
+    const toggleDoor = (roomId, room, door, open) => {
+      if (door.triggered === open) return;
+      door.triggered = open;
+      if (open && door.reveal && room.fog?.enabled && room.fog.areas.length < MAX_FOG_AREAS) {
+        room.fog.areas.push({ ...door.reveal, hide: false });
+        io.to(roomId).emit('fog-updated', room.fog);
+      }
+      emitFeatures(roomId, room);
+      createAndBroadcastLog(roomId, 'Master', 'MASTER', 'MAP_CHANGE', `Il Master ${open ? 'apre' : 'chiude'} la porta "${door.name}".`);
+    };
+
+    // ATMOSFERA (Master only): meteo e luce della scena, visti da tutti e salvati con la scena
+    const WEATHERS = ['none', 'rain', 'storm', 'snow', 'mist'];
+    const LIGHTS = ['day', 'dusk', 'night', 'fire'];
+    socket.on('set-ambience', ({ weather, light } = {}) => {
+      const roomId = socket.roomId;
+      const room = rooms.get(roomId);
+      if (!room || socket.role !== 'MASTER') return;
+      const current = room.ambience || { weather: 'none', light: 'day' };
+      room.ambience = {
+        weather: WEATHERS.includes(weather) ? weather : current.weather,
+        light: LIGHTS.includes(light) ? light : current.light,
+      };
+      io.to(roomId).emit('ambience-updated', room.ambience);
+    });
+
+    // EFFETTI ISTANTANEI (Master only): scossa, fulmine, esplosione su tutti gli schermi. Non vengono salvati.
+    const MAP_EFFECTS = ['shake', 'lightning', 'explosion'];
+    socket.on('map-effect', ({ kind } = {}) => {
+      const roomId = socket.roomId;
+      if (!rooms.get(roomId) || socket.role !== 'MASTER' || !MAP_EFFECTS.includes(kind)) return;
+      const now = Date.now();
+      if (now - (socket.lastEffectAt || 0) < 500) return; // niente raffiche
+      socket.lastEffectAt = now;
+      io.to(roomId).emit('map-effect', { kind });
+    });
+
+    // VOTAZIONE DEL GRUPPO: il Master fa una domanda con 2-6 risposte, ogni giocatore vota con la sua pedina
+    // (può cambiare idea finché è aperta). Il Master decide se il voto è segreto e quando chiuderla.
+    const emitPoll = (roomId, room) => {
+      for (const id of io.sockets.adapter.rooms.get(roomId) ?? []) {
+        const s = io.sockets.sockets.get(id);
+        s?.emit('poll-updated', publicPoll(room.poll, s.role === 'MASTER' ? undefined : s.tokenId ?? ''));
+      }
+    };
+
+    socket.on('start-poll', ({ question, options, secret } = {}, callback) => {
+      const roomId = socket.roomId;
+      const room = rooms.get(roomId);
+      if (!room || socket.role !== 'MASTER') return callback?.({ success: false, error: 'Solo il Master.' });
+      const cleanQuestion = typeof question === 'string' ? question.trim().slice(0, 150) : '';
+      const cleanOptions = (Array.isArray(options) ? options : [])
+        .map((o) => (typeof o === 'string' ? o.trim().slice(0, 60) : ''))
+        .filter(Boolean)
+        .slice(0, 6);
+      if (!cleanQuestion || cleanOptions.length < 2) {
+        return callback?.({ success: false, error: 'Servono una domanda e almeno due risposte.' });
+      }
+
+      room.poll = {
+        id: `poll-${Date.now()}`,
+        question: cleanQuestion,
+        options: cleanOptions,
+        secret: Boolean(secret),
+        closed: false,
+        votes: {}, // tokenId -> indice della risposta
+      };
+      emitPoll(roomId, room);
+      createAndBroadcastLog(roomId, 'Master', 'MASTER', 'MAP_CHANGE', `Il Master chiede al gruppo: "${cleanQuestion}"`);
+      callback?.({ success: true });
+    });
+
+    socket.on('vote', ({ pollId, option } = {}) => {
+      const roomId = socket.roomId;
+      const room = rooms.get(roomId);
+      const poll = room?.poll;
+      if (!poll || poll.closed || poll.id !== pollId || socket.role === 'MASTER') return;
+      if (!Number.isInteger(option) || option < 0 || option >= poll.options.length) return;
+      if (!room.tokens.some((t) => t.id === socket.tokenId && t.type === 'player')) return;
+      poll.votes[socket.tokenId] = option;
+      emitPoll(roomId, room);
+    });
+
+    // Il Master rende il voto segreto/palese, chiude la votazione o la toglie (remove)
+    socket.on('update-poll', ({ secret, closed, remove } = {}) => {
+      const roomId = socket.roomId;
+      const room = rooms.get(roomId);
+      const poll = room?.poll;
+      if (!poll || socket.role !== 'MASTER') return;
+      if (remove) room.poll = null;
+      if (typeof secret === 'boolean') poll.secret = secret;
+      if (closed === true && !poll.closed) {
+        poll.closed = true;
+        const { counts } = publicPoll(poll);
+        const best = Math.max(...counts);
+        const winners = poll.options.filter((_, i) => counts[i] === best);
+        const result = best === 0 ? 'nessun voto' : `${winners.join(' / ')} (${best} ${best === 1 ? 'voto' : 'voti'})`;
+        createAndBroadcastLog(roomId, 'Master', 'MASTER', 'MAP_CHANGE', `Votazione chiusa: "${poll.question}". Vince: ${result}.`);
+      }
+      emitPoll(roomId, room);
     });
 
     // SUSSURRI: messaggi privati tra un giocatore e il Master. La conversazione è legata alla pedina del

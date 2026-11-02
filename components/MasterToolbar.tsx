@@ -25,9 +25,10 @@ import {
   Eye,
   EyeOff,
   Bomb,
+  CloudLightning,
 } from 'lucide-react';
 
-import { MapFeatureKind, RoomState } from '@/lib/types';
+import { Ambience, MapEffect, MapFeatureKind, RoomState } from '@/lib/types';
 import { Socket } from 'socket.io-client';
 import { cn, resizeImageFile, FEATURES } from '@/lib/utils';
 import type { MeasureKind } from '@/lib/measure';
@@ -51,6 +52,25 @@ const MEASURE_TOOLS: { kind: MeasureKind; label: string; icon: React.ReactNode }
   { kind: 'sphere', label: 'Sfera', icon: <CircleDot size={18} /> },
   { kind: 'cone', label: 'Cono', icon: <Triangle size={18} /> },
   { kind: 'line', label: 'Linea', icon: <MoveRight size={18} /> },
+];
+
+const WEATHERS: { value: Ambience['weather']; label: string }[] = [
+  { value: 'none', label: '☀️ Sereno' },
+  { value: 'rain', label: '🌧️ Pioggia' },
+  { value: 'storm', label: '⛈️ Tempesta' },
+  { value: 'snow', label: '❄️ Neve' },
+  { value: 'mist', label: '🌫️ Nebbia' },
+];
+const LIGHTS: { value: Ambience['light']; label: string }[] = [
+  { value: 'day', label: '🌞 Giorno' },
+  { value: 'dusk', label: '🌇 Tramonto' },
+  { value: 'night', label: '🌙 Notte' },
+  { value: 'fire', label: '🔥 Fuoco' },
+];
+const EFFECTS: { value: MapEffect; label: string }[] = [
+  { value: 'shake', label: '🫨 Scossa' },
+  { value: 'lightning', label: '⚡ Fulmine' },
+  { value: 'explosion', label: '💥 Esplosione' },
 ];
 
 const BRUSH_COLORS = ['#1e293b', '#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#ffffff'];
@@ -455,7 +475,7 @@ export default function MasterToolbar({
               label="Trappole"
               active={activeTool === 'feature'}
               onClick={() => setActiveTool('feature')}
-              title="Trappole, inneschi e forzieri che scattano quando un giocatore ci passa sopra"
+              title="Trappole, inneschi e forzieri che scattano quando un giocatore ci passa sopra, e porte che il Master apre"
             />
           </ToolGroup>
 
@@ -471,6 +491,54 @@ export default function MasterToolbar({
               title="Mostra a tutti un'immagine: lettera, ritratto, oggetto"
             />
             <input ref={handoutInputRef} type="file" accept="image/*" onChange={handleHandoutUpload} className="hidden" />
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <ToolButton icon={<CloudLightning size={20} />} label="Atmosfera" title="Meteo, luce ed effetti per tutti" />
+              </PopoverTrigger>
+              <PopoverContent className="w-72 p-2 bg-slate-900/95 border-amber-500/30 backdrop-blur-xl shadow-2xl flex flex-col gap-2">
+                {[
+                  { title: 'Meteo', items: WEATHERS, current: room.ambience?.weather ?? 'none', key: 'weather' },
+                  { title: 'Luce', items: LIGHTS, current: room.ambience?.light ?? 'day', key: 'light' },
+                ].map(({ title, items, current, key }) => (
+                  <div key={key}>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1 pb-1">{title}</div>
+                    <div className="flex flex-wrap gap-1">
+                      {items.map(({ value, label }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          aria-pressed={current === value}
+                          onClick={() => socket?.emit('set-ambience', { [key]: value })}
+                          className={`px-2 py-1 rounded-lg border text-[11px] font-semibold ${
+                            current === value
+                              ? 'bg-amber-500/20 border-amber-400 text-amber-100'
+                              : 'bg-slate-950 border-slate-700 text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <div>
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1 pb-1">Effetti istantanei</div>
+                  <div className="flex flex-wrap gap-1">
+                    {EFFECTS.map(({ value, label }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => socket?.emit('map-effect', { kind: value })}
+                        className="px-2 py-1 rounded-lg border border-red-500/40 bg-red-950/30 text-[11px] font-semibold text-red-100 hover:bg-red-900/40"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
 
             <Popover>
               <PopoverTrigger asChild>

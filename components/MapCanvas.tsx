@@ -278,6 +278,8 @@ export default function MapCanvas({
   // Stato Popover HP Token
   const [hpModalToken, setHpModalToken] = useState<Token | null>(null);
   const [featureCell, setFeatureCell] = useState<{ x: number; y: number } | null>(null);
+  const [featureReveal, setFeatureReveal] = useState<FogArea>();
+  const doorDragRef = useRef<{ x: number; y: number }[] | null>(null); // porta: dal suo quadretto all'angolo della stanza
   const [inputHp, setInputHp] = useState<number>(10);
   const [inputMaxHp, setInputMaxHp] = useState<number>(10);
 
@@ -422,7 +424,16 @@ export default function MapCanvas({
       const secret = f.kind === 'trigger' || (f.kind === 'trap' && !f.triggered);
       const size = room.gridSize;
       ctx.save();
-      ctx.globalAlpha = secret ? 0.6 : f.kind === 'chest' && f.triggered ? 0.55 : 1;
+      ctx.globalAlpha = secret ? 0.6 : (f.kind === 'chest' || f.kind === 'door') && f.triggered ? 0.4 : 1;
+      // il Master, con lo strumento Trappole, vede la stanza collegata a ogni porta
+      if (f.reveal && activeTool === 'feature') {
+        ctx.save();
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 2 / zoom;
+        ctx.setLineDash([8 / zoom, 6 / zoom]);
+        ctx.strokeRect(f.reveal.x, f.reveal.y, f.reveal.w, f.reveal.h);
+        ctx.restore();
+      }
       if (secret) {
         ctx.strokeStyle = f.kind === 'trap' ? '#ef4444' : '#a855f7';
         ctx.lineWidth = 2 / zoom;
@@ -435,6 +446,12 @@ export default function MapCanvas({
       ctx.fillText(f.triggered ? FEATURES[f.kind].done : FEATURES[f.kind].icon, f.x, f.y);
       ctx.restore();
     });
+
+    if (doorDragRef.current) {
+      const a = fogAreaFrom(doorDragRef.current, room.gridSize, false);
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.15)';
+      ctx.fillRect(a.x, a.y, a.w, a.h);
+    }
 
     // 3.2 NEBBIA DI GUERRA: copre tutto tranne le aree rivelate. I giocatori la vedono opaca,
     // il Master in trasparenza per continuare a vedere la mappa. Canvas separato come i disegni.
@@ -837,6 +854,15 @@ export default function MapCanvas({
       return Math.hypot(dx, dy) <= (t.size || room.gridSize * 0.8) / 2;
     });
 
+  const cellCenter = (pos: { x: number; y: number }) => ({
+    x: (Math.floor(pos.x / room.gridSize) + 0.5) * room.gridSize,
+    y: (Math.floor(pos.y / room.gridSize) + 0.5) * room.gridSize,
+  });
+  const featureAt = (pos: { x: number; y: number }) => {
+    const c = cellCenter(pos);
+    return room.features?.find((f) => f.x === c.x && f.y === c.y);
+  };
+
   // MOUSE DOWN: Inizio Pan, Trascinamento Token o Disegno
   const handleMouseDown = (e: React.MouseEvent) => {
     mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
@@ -856,9 +882,12 @@ export default function MapCanvas({
 
     // ELEMENTI (Master): il clic su un quadretto apre la creazione, o la gestione se c'è già qualcosa
     if (activeTool === 'feature' && role === 'MASTER' && e.button === 0) {
-      const col = Math.floor(worldPos.x / room.gridSize);
-      const row = Math.floor(worldPos.y / room.gridSize);
-      setFeatureCell({ x: (col + 0.5) * room.gridSize, y: (row + 0.5) * room.gridSize });
+      if (featureKind === 'door' && !featureAt(worldPos)) {
+        doorDragRef.current = [worldPos, worldPos];
+        return;
+      }
+      setFeatureReveal(undefined);
+      setFeatureCell(cellCenter(worldPos));
       return;
     }
 
@@ -939,6 +968,11 @@ export default function MapCanvas({
       return;
     }
 
+    if (doorDragRef.current) {
+      doorDragRef.current = [doorDragRef.current[0], worldPos];
+      return;
+    }
+
     // 2. Gestione Trascinamento Token (Privato al controllore, visibile agli altri solo al rilascio)
     if (draggedTokenId) {
       const rawTargetX = worldPos.x - dragOffsetRef.current.x;
@@ -969,6 +1003,16 @@ export default function MapCanvas({
   // MOUSE UP: Rilascio e Rilevamento Click Popover HP
   const handleMouseUp = (e?: React.MouseEvent) => {
     cancelPing();
+
+    // Porta: piazzata nel quadretto di partenza; se ho trascinato, la stanza va dalla porta al punto di rilascio
+    const door = doorDragRef.current;
+    if (door) {
+      doorDragRef.current = null;
+      const area = fogAreaFrom(door, room.gridSize, false);
+      setFeatureReveal(area.w > room.gridSize || area.h > room.gridSize ? { x: area.x, y: area.y, w: area.w, h: area.h } : undefined);
+      setFeatureCell(cellCenter(door[0]));
+      return;
+    }
 
     // Fine misura: la mostro a tutti. Un clic senza trascinare toglie la mia misura.
     const m = measureDragRef.current;
@@ -1005,6 +1049,10 @@ export default function MapCanvas({
             setInputHp(clickedToken.hp ?? 10);
             setInputMaxHp(clickedToken.maxHp ?? 10);
           }
+        } else if (role === 'MASTER') {
+          // clic del Master su una porta: la apre o la chiude
+          const door = featureAt(worldPos);
+          if (door?.kind === 'door') socket?.emit('update-feature', { featureId: door.id, open: !door.triggered });
         }
       }
     }
@@ -1207,7 +1255,7 @@ export default function MapCanvas({
       </div>
 
       {role === 'MASTER' && (
-        <FeatureDialog room={room} socket={socket} cell={featureCell} kind={featureKind} onClose={() => setFeatureCell(null)} />
+        <FeatureDialog room={room} socket={socket} cell={featureCell} reveal={featureReveal} kind={featureKind} onClose={() => setFeatureCell(null)} />
       )}
 
       {/* DIALOG POPOVER MODALE HP TOKEN */}

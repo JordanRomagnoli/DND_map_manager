@@ -83,7 +83,7 @@ export interface Whisper {
 
 // Elemento della mappa piazzato dal Master al centro di un quadretto. Scatta quando ci arriva una pedina giocatore.
 // text: effetto della trappola, contenuto del forziere o nota dell'innesco (ai giocatori dopo lo scatto, mai per l'innesco)
-export type MapFeatureKind = 'trap' | 'trigger' | 'chest';
+export type MapFeatureKind = 'trap' | 'trigger' | 'chest' | 'door';
 export interface MapFeature {
   id: string;
   kind: MapFeatureKind;
@@ -91,8 +91,28 @@ export interface MapFeature {
   y: number;
   name: string;
   text?: string;
-  triggered: boolean;
+  triggered: boolean; // per le porte: aperta
+  reveal?: { x: number; y: number; w: number; h: number }; // porta: stanza che si scopre aprendola (solo al Master)
 }
+
+// Votazione del gruppo. counts: voti per risposta; votes (tokenId -> indice) completo per il Master,
+// per i giocatori solo il proprio se il voto è segreto
+export interface Poll {
+  id: string;
+  question: string;
+  options: string[];
+  secret: boolean;
+  closed: boolean;
+  counts: number[];
+  votes: Record<string, number>;
+}
+
+// Atmosfera della scena decisa dal Master, ed effetti istantanei (non salvati)
+export interface Ambience {
+  weather: 'none' | 'rain' | 'storm' | 'snow' | 'mist';
+  light: 'day' | 'dusk' | 'night' | 'fire';
+}
+export type MapEffect = 'shake' | 'lightning' | 'explosion';
 
 // Combattimento a iniziativa: entries già ordinate dal server (valore più alto prima)
 export interface Initiative {
@@ -121,4 +141,6 @@ export interface RoomState {
   whispers?: Whisper[]; // il giocatore riceve solo i propri
   mutedTokenIds?: string[]; // giocatori silenziati dal Master (al giocatore arriva solo se è lui)
   features?: MapFeature[]; // ai giocatori solo forzieri e trappole scattate
+  poll?: Poll | null; // votazione in corso o appena chiusa
+  ambience?: Ambience | null; // null o assente = sereno, di giorno
 }

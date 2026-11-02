@@ -262,3 +262,50 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--accent-gold);
 }
+
+/* Atmosfera ed effetti del Master (components/Ambience.tsx) */
+@keyframes fx-shake {
+  0%, 100% { transform: translate(0, 0); }
+  15% { transform: translate(-10px, 6px); }
+  30% { transform: translate(9px, -7px); }
+  45% { transform: translate(-7px, -5px); }
+  60% { transform: translate(6px, 7px); }
+  75% { transform: translate(-4px, 3px); }
+}
+.fx-shake { animation: fx-shake 0.6s ease-out; }
+
+@keyframes fx-lightning {
+  0% { opacity: 0.9; }
+  10% { opacity: 0; }
+  20% { opacity: 0.75; }
+  100% { opacity: 0; }
+}
+.fx-lightning { animation: fx-lightning 0.7s ease-out forwards; }
+
+@keyframes fx-boom {
+  0% { opacity: 0; transform: scale(0.3); }
+  15% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.4); }
+}
+.fx-boom { animation: fx-boom 0.9s ease-out forwards; }
+
+@keyframes fx-flicker {
+  0%, 100% { opacity: 1; }
+  30% { opacity: 0.85; }
+  55% { opacity: 0.95; }
+  75% { opacity: 0.8; }
+}
+.fx-flicker { animation: fx-flicker 1.6s ease-in-out infinite; }
+
+@keyframes fx-mist {
+  0%, 100% { transform: translate(-4%, 0); }
+  50% { transform: translate(4%, 2%); }
+}
+.fx-mist { animation: fx-mist 18s ease-in-out infinite; }
+.fx-mist-slow { animation-duration: 26s; animation-direction: reverse; }
+
+/* Chi ha chiesto meno movimento: niente scosse né lampi, solo la luce fissa */
+@media (prefers-reduced-motion: reduce) {
+  .fx-shake, .fx-flicker, .fx-mist { animation: none; }
+  .fx-lightning, .fx-boom { animation: none; opacity: 0; }
+}

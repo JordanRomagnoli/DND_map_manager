@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
-import { RoomState, UserRole, Token, ActionLogRecord, Initiative, Whisper, MapFeature, MapFeatureKind } from '@/lib/types';
+import { RoomState, UserRole, Token, ActionLogRecord, Initiative, Whisper, MapFeature, MapFeatureKind, Poll, Ambience as AmbienceState } from '@/lib/types';
 import MapCanvas from '@/components/MapCanvas';
 import MasterToolbar from '@/components/MasterToolbar';
 import PlayerToolbar from '@/components/PlayerToolbar';
@@ -15,6 +15,8 @@ import HandoutViewer from '@/components/HandoutViewer';
 import TurnAlert from '@/components/TurnAlert';
 import FeatureAlert from '@/components/FeatureAlert';
 import WhisperPanel from '@/components/WhisperPanel';
+import PollPanel from '@/components/PollPanel';
+import Ambience from '@/components/Ambience';
 import { db } from '@/lib/db';
 import { hiddenByFog } from '@/lib/utils';
 import type { MeasureKind } from '@/lib/measure';
@@ -326,6 +328,14 @@ export default function GameRoomPage() {
       setRoom((prev) => (prev ? { ...prev, mutedTokenIds } : null));
     });
 
+    newSocket.on('ambience-updated', (ambience: AmbienceState) => {
+      setRoom((prev) => (prev ? { ...prev, ambience } : null));
+    });
+
+    newSocket.on('poll-updated', (poll: Poll | null) => {
+      setRoom((prev) => (prev ? { ...prev, poll } : null));
+    });
+
     newSocket.on('features-updated', (features: MapFeature[]) => {
       setRoom((prev) => (prev ? { ...prev, features } : null));
     });
@@ -547,6 +557,9 @@ export default function GameRoomPage() {
 
         {/* Sussurri privati tra giocatori e Master */}
         <WhisperPanel room={room} role={role} socket={socket} myTokenId={myTokenId} />
+
+        {/* Votazione del gruppo */}
+        <PollPanel room={room} role={role} socket={socket} myTokenId={myTokenId} />
       </header>
 
 
@@ -565,6 +578,8 @@ export default function GameRoomPage() {
         brushWidth={brushWidth}
         centerTokenTrigger={centerTokenTrigger}
       />
+
+      <Ambience ambience={room.ambience} socket={socket} />
 
       {/* 2. TOOLBAR SOSPESA (MASTER vs PLAYER) */}
       {role === 'MASTER' ? (
