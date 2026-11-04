@@ -351,7 +351,9 @@ export default function MapCanvas({
 
     // 1. LAYER SFONDO MAPPA CUSTOM (se caricata dal Master)
     if (bgImageRef.current) {
-      ctx.drawImage(bgImageRef.current, 0, 0);
+      const bg = bgImageRef.current;
+      const bgScale = room.backgroundScale ?? 1;
+      ctx.drawImage(bg, 0, 0, bg.naturalWidth * bgScale, bg.naturalHeight * bgScale);
     }
 
     // 2. LAYER GRIGLIA TATTICA A QUADRETTI

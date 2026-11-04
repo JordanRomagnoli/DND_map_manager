@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   MousePointer,
   Hand,
@@ -8,6 +8,8 @@ import {
   Eraser,
   Image as ImageIcon,
   PlusCircle,
+  Plus,
+  Minus,
   Trash2,
   Grid,
   Upload,
@@ -165,6 +167,18 @@ export default function MasterToolbar({
 
   // Form Mappa Sfondo State
   const [mapUrl, setMapUrl] = useState<string>('');
+  // Scala della mappa in percentuale: locale per uno slider fluido, riallineata quando arriva dal server
+  const [mapScalePct, setMapScalePct] = useState<number>(Math.round((room.backgroundScale ?? 1) * 100));
+  useEffect(() => {
+    setMapScalePct(Math.round((room.backgroundScale ?? 1) * 100));
+  }, [room.backgroundScale]);
+
+  const applyMapScale = (pct: number) => {
+    if (!socket || !Number.isFinite(pct)) return;
+    const clamped = Math.min(1000, Math.max(10, Math.round(pct)));
+    setMapScalePct(clamped);
+    socket.emit('update-background-scale', { backgroundScale: clamped / 100 });
+  };
 
   // Caricamento Immagine Avatar per NPC
   const handleNpcAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -816,6 +830,54 @@ export default function MasterToolbar({
               Imposta da URL
             </Button>
           </form>
+
+          {/* Ridimensionamento della mappa caricata, per allinearla alla griglia */}
+          {room.backgroundUrl && (
+            <div className="mt-4 space-y-2">
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                Dimensione Mappa
+              </label>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="secondary" className="h-8 w-8 p-0" onClick={() => applyMapScale((Number.isFinite(mapScalePct) ? mapScalePct : 100) - 5)} title="Rimpicciolisci">
+                  <Minus size={14} />
+                </Button>
+                <input
+                  type="range"
+                  min={10}
+                  max={400}
+                  step={1}
+                  value={Math.min(400, Number.isFinite(mapScalePct) ? mapScalePct : 100)}
+                  onChange={(e) => applyMapScale(Number(e.target.value))}
+                  className="flex-1 accent-amber-400"
+                  aria-label="Dimensione mappa"
+                />
+                <Button type="button" variant="secondary" className="h-8 w-8 p-0" onClick={() => applyMapScale((Number.isFinite(mapScalePct) ? mapScalePct : 100) + 5)} title="Ingrandisci">
+                  <Plus size={14} />
+                </Button>
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="number"
+                    min={10}
+                    max={1000}
+                    value={Number.isFinite(mapScalePct) ? mapScalePct : ''}
+                    onChange={(e) => {
+                      // mentre si scrive applica solo i valori validi, il resto viene corretto all'uscita dal campo
+                      const v = Number(e.target.value);
+                      setMapScalePct(e.target.value === '' ? NaN : v);
+                      if (v >= 10 && v <= 1000) applyMapScale(v);
+                    }}
+                    onBlur={() => applyMapScale(Number.isFinite(mapScalePct) ? mapScalePct : 100)}
+                    className="h-8 w-20 text-xs"
+                    aria-label="Dimensione mappa in percentuale"
+                  />
+                  <span className="text-xs text-slate-400">%</span>
+                </div>
+              </div>
+              <Button type="button" variant="secondary" onClick={() => applyMapScale(100)} className="w-full text-xs">
+                Dimensione Originale (100%)
+              </Button>
+            </div>
+          )}
 
           {/* Pulsante Reset a Foglio Bianco */}
           <Button
