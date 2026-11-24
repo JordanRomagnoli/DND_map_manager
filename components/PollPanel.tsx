@@ -65,12 +65,12 @@ export default function PollPanel({ room, role, socket, myTokenId }: PollPanelPr
           <Vote className="w-4 h-4 text-emerald-400" />
           <span className="hidden sm:inline font-medium text-xs">Votazione</span>
           {needsAttention && (
-            <span className="absolute -top-1.5 -right-1.5 w-[18px] h-[18px] rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center">
+            <span className="absolute -top-1.5 -right-1.5 w-[18px] h-[18px] rounded-full bg-emerald-500 text-white text-[11px] font-medium flex items-center justify-center">
               !
             </span>
           )}
           {isMaster && poll && !poll.closed && (
-            <span className="text-[10px] font-bold text-emerald-300">
+            <span className="text-[11px] font-medium text-emerald-300">
               {Object.keys(poll.votes).length}/{players.length}
             </span>
           )}
@@ -87,7 +87,7 @@ export default function PollPanel({ room, role, socket, myTokenId }: PollPanelPr
               <Vote className="w-4 h-4 text-emerald-400" />
             </div>
             <div>
-              <h4 className="font-semibold text-sm text-slate-100 leading-none">Votazione del gruppo</h4>
+              <h4 className="font-medium text-sm text-slate-100 leading-none">Votazione del gruppo</h4>
               <p className="text-[11px] text-slate-400 mt-0.5">
                 {!poll ? 'Fai decidere il gruppo' : poll.closed ? 'Votazione chiusa' : poll.secret ? 'Voto segreto' : 'Voto palese'}
               </p>
@@ -105,7 +105,7 @@ export default function PollPanel({ room, role, socket, myTokenId }: PollPanelPr
 
         {poll ? (
           <div className="p-3 space-y-2">
-            <p className="font-semibold text-sm text-white">{poll.question}</p>
+            <p className="font-medium text-sm text-white">{poll.question}</p>
             {poll.options.map((option, i) => {
               const count = poll.counts[i];
               const share = totalVotes ? (count / totalVotes) * 100 : 0;
@@ -122,13 +122,13 @@ export default function PollPanel({ room, role, socket, myTokenId }: PollPanelPr
                     myVote === i ? 'border-emerald-400 bg-emerald-500/10' : 'border-slate-700 bg-slate-900'
                   } ${canVote ? 'hover:border-emerald-500/60' : 'cursor-default'}`}
                 >
-                  <span className="absolute inset-y-0 left-0 bg-emerald-500/20 transition-all" style={{ width: `${share}%` }} />
+                  <span className="absolute inset-y-0 left-0 bg-emerald-500/20" style={{ width: `${share}%` }} />
                   <span className="relative flex items-center justify-between gap-2">
-                    <span className="font-semibold text-slate-100">{option}</span>
-                    <span className="font-mono font-bold text-emerald-300">{count}</span>
+                    <span className="font-medium text-slate-100">{option}</span>
+                    <span className="font-mono font-medium text-emerald-300">{count}</span>
                   </span>
                   {names.length > 0 && (isMaster || !poll.secret) && (
-                    <span className="relative block mt-0.5 text-[10px] text-slate-400">{names.join(', ')}</span>
+                    <span className="relative block mt-0.5 text-[11px] text-slate-400">{names.join(', ')}</span>
                   )}
                 </button>
               );
@@ -221,7 +221,7 @@ export default function PollPanel({ room, role, socket, myTokenId }: PollPanelPr
               </label>
             </div>
             {error && <p className="text-[11px] text-red-400">{error}</p>}
-            <Button type="submit" className="w-full h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white">
+            <Button type="submit" className="w-full h-8 text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white">
               Avvia votazione
             </Button>
           </form>

@@ -37,13 +37,13 @@ export default function InvitePanel({ roomId, publicUrl }: InvitePanelProps) {
           size="sm"
           className="bg-slate-900/90 border-slate-700 text-slate-200 hover:bg-slate-800 hover:text-white shadow-lg backdrop-blur-md gap-2"
         >
-          <QrCode className="w-4 h-4 text-amber-400" />
+          <QrCode className="w-4 h-4 text-slate-400" />
           <span className="hidden sm:inline font-medium text-xs">Invita giocatori</span>
         </Button>
       </PopoverTrigger>
 
       <PopoverContent align="start" className="w-[calc(100vw-1.5rem)] sm:w-80 p-4 text-center space-y-3">
-        <h4 className="font-semibold text-sm text-slate-100">Invita i giocatori</h4>
+        <h4 className="font-medium text-sm text-slate-100">Invita i giocatori</h4>
         <p className="text-[11px] text-slate-400">
           Inquadrate il QR col telefono: si apre la stanza <span className="font-mono text-amber-300">#{roomId}</span>, poi
           serve la password.

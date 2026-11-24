@@ -58,11 +58,11 @@ export default function FeatureDialog({ room, socket, cell, reveal, kind, onClos
 
   return (
     <Dialog open={!!cell} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="bg-slate-900/95 text-slate-100 border-amber-500/30 backdrop-blur-xl max-w-sm rounded-2xl p-6">
+      <DialogContent className="bg-slate-900/95 text-slate-100 border-white/[0.08] backdrop-blur-xl max-w-sm rounded-2xl p-6">
         {existing ? (
           <div className="flex flex-col gap-4">
             <DialogHeader>
-              <DialogTitle className="text-xl font-bold rpg-font text-amber-200 pr-8">
+              <DialogTitle className="text-xl font-medium text-slate-100 pr-8">
                 {FEATURES[existing.kind].icon} {existing.name}
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-400">
@@ -93,7 +93,7 @@ export default function FeatureDialog({ room, socket, cell, reveal, kind, onClos
         ) : (
           <form onSubmit={create} className="flex flex-col gap-4">
             <DialogHeader>
-              <DialogTitle className="text-xl font-bold rpg-font text-amber-200">Nuovo elemento</DialogTitle>
+              <DialogTitle className="text-xl font-medium text-slate-100">Nuovo elemento</DialogTitle>
               <DialogDescription className="text-xs text-slate-400">{FEATURES[newKind].hint}</DialogDescription>
             </DialogHeader>
             <div className="grid grid-cols-4 gap-1.5">
@@ -103,7 +103,7 @@ export default function FeatureDialog({ room, socket, cell, reveal, kind, onClos
                   type="button"
                   aria-pressed={k === newKind}
                   onClick={() => setNewKind(k)}
-                  className={`flex flex-col items-center gap-0.5 py-2 rounded-lg border text-xs font-semibold ${
+                  className={`flex flex-col items-center gap-0.5 py-2 rounded-lg border text-xs font-medium ${
                     k === newKind ? 'bg-amber-500/20 border-amber-400 text-amber-100' : 'bg-slate-950 border-slate-700 text-slate-400'
                   }`}
                 >
@@ -121,7 +121,7 @@ export default function FeatureDialog({ room, socket, cell, reveal, kind, onClos
               className="bg-slate-950 border-slate-700"
             />
             {newKind === 'door' && !reveal && (
-              <p className="text-[11px] text-amber-300/80">
+              <p className="text-[11px] text-slate-500">
                 Nessuna stanza collegata: per scoprirne una all'apertura, chiudi e trascina dalla porta all'angolo opposto.
               </p>
             )}
@@ -141,7 +141,7 @@ export default function FeatureDialog({ room, socket, cell, reveal, kind, onClos
               className="w-full rounded-md bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-white outline-none focus:border-amber-400 resize-none"
             />}
             {error && <p className="text-xs text-red-400">{error}</p>}
-            <Button type="submit" className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold">
+            <Button type="submit" className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-medium">
               Piazza {FEATURES[newKind].label.toLowerCase()}
             </Button>
           </form>

@@ -8,9 +8,7 @@ import {
   Crown,
   User,
   Lock,
-  Sparkles,
   RefreshCw,
-  KeyRound,
   Zap,
   Grid,
   Map,
@@ -19,10 +17,9 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
 
 const PRESET_COLORS = [
   '#3b82f6', // Blue
@@ -168,295 +165,344 @@ export default function LandingPage() {
   };
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-between p-4 md:p-8 relative overflow-hidden bg-slate-950 text-slate-100 selection:bg-amber-500 selection:text-slate-950">
-      {/* Dynamic Radial Ambient Lights */}
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+    <main className="min-h-screen bg-slate-950 text-slate-100 selection:bg-amber-400 selection:text-slate-950">
+      <div className="mx-auto w-full max-w-[1440px] px-4 sm:px-6 lg:px-8">
+        <header className="h-16 flex items-center justify-between">
+          <span className="rpg-font text-lg text-slate-100">Map Manager D&amp;D</span>
+        </header>
 
-      {/* Main Container */}
-      <div className="w-full max-w-xl my-auto z-10 flex flex-col items-center">
-        {/* Header Title */}
-        <div className="text-center mb-8">
-          <Badge variant="default" className="mb-4 px-3.5 py-1.5 gap-2 text-xs font-semibold shadow-gold-glow animate-pulse">
-            <Sparkles size={16} className="text-amber-400" />
-            <span>D&D Real-Time Battlespace v0.1</span>
-          </Badge>
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-12 pt-8 pb-16 lg:pt-12 lg:grid-cols-[minmax(0,460px)_minmax(0,1fr)] lg:gap-16 lg:items-start">
+          {/* Colonna sinistra: titolo e accesso */}
+          <div>
+            <h1 className="rpg-font text-4xl sm:text-5xl leading-[1.08] text-slate-100">
+              La mappa di battaglia del tuo tavolo
+            </h1>
+            <p className="mt-4 text-lg leading-7 text-slate-400">
+              Disegna mappe, posiziona i mostri e lascia che ogni giocatore muova la propria pedina dal telefono, in tempo reale.
+            </p>
 
-          <h1 className="text-4xl sm:text-5xl font-extrabold text-white tracking-tight rpg-font mb-3 drop-shadow-md">
-            Map Manager <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500">D&D</span>
-          </h1>
-
-          <p className="text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
-            Organizza i tuoi combattimenti tattici in tempo reale: disegna mappe, posiziona mostri e muovi i token dei giocatori istantaneamente.
-          </p>
-        </div>
-
-        {/* Card Form Principale ShadCN */}
-        <Card className="w-full border-amber-500/30 p-2 sm:p-4 shadow-2xl">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-center text-lg text-slate-200">Accedi alla Sessione di Gioco</CardTitle>
-            <CardDescription className="text-center text-slate-400">
-              Scegli se creare una nuova stanza come Dungeon Master o unirti come Giocatore.
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="p-4 pt-2">
-            {/* Stanze esistenti: rientro veloce senza ricordarsi il codice */}
-            {existingRooms.length > 0 && (
-              <div className="mb-6 space-y-2">
-                <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Stanze esistenti</h3>
-                <div className="max-h-52 overflow-y-auto space-y-1.5">
-                  {existingRooms.map((r) => (
-                    <div
-                      key={r.id}
-                      className={`flex flex-wrap items-center gap-2 p-2 rounded-xl border bg-slate-900/60 ${
-                        r.id === joinRoomId || r.id === createRoomId ? 'border-amber-500/60' : 'border-slate-800'
-                      }`}
-                    >
-                      {/* su telefono il nome sta su una riga intera e i pulsanti sotto */}
-                      <div className="w-full sm:w-auto sm:flex-1 min-w-0 text-left">
-                        <p className="text-sm font-semibold text-slate-100 truncate">{r.name}</p>
-                        <p className="text-[11px] font-mono text-amber-300/80 truncate">#{r.id}</p>
-                      </div>
-                      <Button type="button" size="sm" variant="secondary" onClick={() => pickRoom(r.id, 'join')} className="h-8 px-2.5 text-xs gap-1 flex-1 sm:flex-none">
-                        <User size={14} /> Giocatore
-                      </Button>
-                      <Button type="button" size="sm" variant="secondary" onClick={() => pickRoom(r.id, 'create')} className="h-8 px-2.5 text-xs gap-1 flex-1 sm:flex-none">
-                        <Crown size={14} className="text-amber-400" /> Master
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => deleteRoom(r)}
-                        className="h-8 w-8 p-0 text-slate-400 hover:text-red-400"
-                        title={`Elimina ${r.name}`}
-                        aria-label={`Elimina ${r.name}`}
+            <Card className="mt-8 p-4 sm:p-6">
+              {/* Stanze esistenti: rientro veloce senza ricordarsi il codice */}
+              {existingRooms.length > 0 && (
+                <div className="mb-6">
+                  <h2 className="mb-2 text-sm text-slate-400">Stanze esistenti</h2>
+                  <div className="max-h-52 overflow-y-auto space-y-1">
+                    {existingRooms.map((r) => (
+                      <div
+                        key={r.id}
+                        className={`flex flex-wrap items-center gap-2 p-2 rounded-lg border bg-slate-800/60 ${
+                          r.id === joinRoomId || r.id === createRoomId ? 'border-amber-400/40' : 'border-white/[0.06]'
+                        }`}
                       >
-                        <Trash2 size={14} />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Tabs ShadCN */}
-            <Tabs defaultValue="create" value={activeTab} onValueChange={(val) => { setActiveTab(val); setErrorMsg(''); }}>
-              <TabsList className="mb-6 h-13">
-                <TabsTrigger value="create">
-                  <Crown size={18} className={activeTab === 'create' ? 'text-amber-400' : ''} />
-                  <span>Crea Stanza<span className="hidden sm:inline"> (Master)</span></span>
-                </TabsTrigger>
-                <TabsTrigger value="join">
-                  <User size={18} className={activeTab === 'join' ? 'text-blue-400' : ''} />
-                  <span>Unisciti<span className="hidden sm:inline"> (Giocatore)</span></span>
-                </TabsTrigger>
-              </TabsList>
-
-              {/* Alert Errore */}
-              {errorMsg && (
-                <div className="mb-5 p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs sm:text-sm flex items-center gap-2.5">
-                  <Lock size={18} className="text-red-400 shrink-0" />
-                  <span>{errorMsg}</span>
+                        {/* su telefono il nome sta su una riga intera e i pulsanti sotto */}
+                        <div className="w-full sm:w-auto sm:flex-1 min-w-0 pl-1 text-left">
+                          <p className="text-sm text-slate-100 truncate">{r.name}</p>
+                          <p className="text-xs font-mono text-slate-500 truncate">#{r.id}</p>
+                        </div>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => pickRoom(r.id, 'join')} className="h-8 px-2 gap-1.5 flex-1 sm:flex-none">
+                          <User size={16} strokeWidth={1.5} /> Giocatore
+                        </Button>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => pickRoom(r.id, 'create')} className="h-8 px-2 gap-1.5 flex-1 sm:flex-none">
+                          <Crown size={16} strokeWidth={1.5} /> Master
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => deleteRoom(r)}
+                          className="h-8 w-8 p-0 text-slate-500 hover:text-red-400"
+                          title={`Elimina ${r.name}`}
+                          aria-label={`Elimina ${r.name}`}
+                        >
+                          <Trash2 size={16} strokeWidth={1.5} />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
-              {/* TAB 1: CREA STANZA (MASTER) */}
-              <TabsContent value="create" className="mt-0">
-                <form onSubmit={handleCreateRoom} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
-                      Codice / Nome Stanza
-                    </label>
-                    <div className="flex gap-2">
+              <Tabs defaultValue="create" value={activeTab} onValueChange={(val) => { setActiveTab(val); setErrorMsg(''); }}>
+                <TabsList className="mb-6">
+                  <TabsTrigger value="create">
+                    <Crown size={16} strokeWidth={1.5} />
+                    <span>Crea stanza<span className="hidden sm:inline"> (Master)</span></span>
+                  </TabsTrigger>
+                  <TabsTrigger value="join">
+                    <User size={16} strokeWidth={1.5} />
+                    <span>Unisciti<span className="hidden sm:inline"> (Giocatore)</span></span>
+                  </TabsTrigger>
+                </TabsList>
+
+                {errorMsg && (
+                  <div role="alert" className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-400/20 text-red-300 text-sm flex items-start gap-2">
+                    <Lock size={16} strokeWidth={1.5} className="shrink-0 mt-0.5" />
+                    <span>{errorMsg}</span>
+                  </div>
+                )}
+
+                <TabsContent value="create" className="mt-0">
+                  <form onSubmit={handleCreateRoom} className="space-y-4">
+                    <Field label="Codice o nome della stanza">
+                      <div className="flex gap-2">
+                        <Input
+                          type="text"
+                          value={createRoomId}
+                          onChange={(e) => setCreateRoomId(e.target.value)}
+                          placeholder="Es. campagna-draghi"
+                          required
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={handleGenerateRoomCode}
+                          className="h-10 px-3 gap-1.5 shrink-0"
+                          title="Genera un codice casuale"
+                        >
+                          <RefreshCw size={16} strokeWidth={1.5} />
+                          <span>Casuale</span>
+                        </Button>
+                      </div>
+                    </Field>
+
+                    <Field label="Password per i giocatori">
+                      <Input
+                        type="password"
+                        value={createPassword}
+                        onChange={(e) => setCreatePassword(e.target.value)}
+                        placeholder="La condividi con il gruppo"
+                        required
+                      />
+                    </Field>
+
+                    <Field
+                      label="Password del Master"
+                      hint="Per rientrare in una stanza esistente, da qualsiasi dispositivo: stesso codice e stessa password del Master."
+                    >
+                      <Input
+                        type="password"
+                        value={masterPassword}
+                        onChange={(e) => setMasterPassword(e.target.value)}
+                        placeholder="Solo tua, diversa da quella dei giocatori"
+                        required
+                      />
+                    </Field>
+
+                    <Field label="Nome del Master">
                       <Input
                         type="text"
-                        value={createRoomId}
-                        onChange={(e) => setCreateRoomId(e.target.value)}
+                        value={masterName}
+                        onChange={(e) => setMasterName(e.target.value)}
+                        placeholder="Dungeon Master"
+                      />
+                    </Field>
+
+                    <Button type="submit" size="lg" className="w-full mt-2 gap-2">
+                      <Crown size={18} strokeWidth={1.5} />
+                      <span>Crea o riapri come Master</span>
+                    </Button>
+                  </form>
+                </TabsContent>
+
+                <TabsContent value="join" className="mt-0">
+                  <form onSubmit={handleJoinRoom} className="space-y-4">
+                    <Field label="Codice della stanza">
+                      <Input
+                        type="text"
+                        value={joinRoomId}
+                        onChange={(e) => setJoinRoomId(e.target.value)}
                         placeholder="Es. campagna-draghi"
                         required
                       />
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={handleGenerateRoomCode}
-                        className="whitespace-nowrap text-xs gap-1.5 shrink-0 h-10 px-3"
-                        title="Genera Codice Casuale"
-                      >
-                        <RefreshCw size={16} className="text-amber-400" />
-                        <span>Casuale</span>
-                      </Button>
-                    </div>
-                  </div>
+                    </Field>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
-                      <KeyRound size={16} className="text-amber-400" />
-                      <span>Password di Accesso per i Giocatori</span>
-                    </label>
-                    <Input
-                      type="password"
-                      value={createPassword}
-                      onChange={(e) => setCreatePassword(e.target.value)}
-                      placeholder="Imposta una password segreta"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
-                      <Crown size={16} className="text-amber-400" />
-                      <span>Password del Master</span>
-                    </label>
-                    <Input
-                      type="password"
-                      value={masterPassword}
-                      onChange={(e) => setMasterPassword(e.target.value)}
-                      placeholder="Solo tua, diversa da quella dei giocatori"
-                      required
-                    />
-                    <p className="mt-1.5 text-[11px] text-slate-400">
-                      Per rientrare in una stanza esistente, da qualsiasi dispositivo: stesso codice e stessa password del Master.
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
-                      Nome Dungeon Master
-                    </label>
-                    <Input
-                      type="text"
-                      value={masterName}
-                      onChange={(e) => setMasterName(e.target.value)}
-                      placeholder="Dungeon Master"
-                    />
-                  </div>
-
-                  <Button type="submit" variant="rpgGold" className="w-full mt-4 py-3.5 text-sm gap-2">
-                    <Crown size={20} />
-                    <span>Crea o Riapri come Master</span>
-                  </Button>
-                </form>
-              </TabsContent>
-
-              {/* TAB 2: UNISCITI (PLAYER) */}
-              <TabsContent value="join" className="mt-0">
-                <form onSubmit={handleJoinRoom} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
-                      Codice Stanza
-                    </label>
-                    <Input
-                      type="text"
-                      value={joinRoomId}
-                      onChange={(e) => setJoinRoomId(e.target.value)}
-                      placeholder="Es. campagna-draghi"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
-                      <KeyRound size={16} className="text-amber-400" />
-                      <span>Password Stanza</span>
-                    </label>
-                    <Input
-                      type="password"
-                      value={joinPassword}
-                      onChange={(e) => setJoinPassword(e.target.value)}
-                      placeholder="Password fornita dal Master"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
-                      Nome del tuo Personaggio
-                    </label>
-                    <Input
-                      type="text"
-                      value={playerName}
-                      onChange={(e) => setPlayerName(e.target.value)}
-                      placeholder="Es. Valeros il Guerriero"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
-                      Colore Token Personaggio
-                    </label>
-                    <div className="flex items-center gap-2.5 mt-2 flex-wrap">
-                      {PRESET_COLORS.map((c) => (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => setPlayerColor(c)}
-                          className={`w-9 h-9 rounded-full transition-all duration-200 border-2 flex items-center justify-center ${
-                            playerColor === c
-                              ? 'scale-110 border-amber-400 shadow-md shadow-amber-500/20'
-                              : 'border-transparent hover:scale-105 opacity-80 hover:opacity-100'
-                          }`}
-                          style={{ backgroundColor: c }}
-                        >
-                          {playerColor === c && <Check size={16} className="text-white drop-shadow" />}
-                        </button>
-                      ))}
-                      <input
-                        type="color"
-                        value={playerColor}
-                        onChange={(e) => setPlayerColor(e.target.value)}
-                        className="w-9 h-9 rounded-full border-none bg-transparent cursor-pointer hover:scale-105 transition-transform"
-                        title="Colore Personalizzato"
+                    <Field label="Password della stanza">
+                      <Input
+                        type="password"
+                        value={joinPassword}
+                        onChange={(e) => setJoinPassword(e.target.value)}
+                        placeholder="Te la dà il Master"
+                        required
                       />
-                    </div>
+                    </Field>
+
+                    <Field label="Nome del personaggio">
+                      <Input
+                        type="text"
+                        value={playerName}
+                        onChange={(e) => setPlayerName(e.target.value)}
+                        placeholder="Es. Valeros il guerriero"
+                        required
+                      />
+                    </Field>
+
+                    <Field label="Colore della pedina">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {PRESET_COLORS.map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => setPlayerColor(c)}
+                            aria-label={`Colore ${c}`}
+                            aria-pressed={playerColor === c}
+                            className={`w-8 h-8 rounded-full flex items-center justify-center ring-offset-2 ring-offset-slate-900 transition-[box-shadow,opacity] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
+                              playerColor === c ? 'ring-2 ring-slate-100' : 'opacity-80 hover:opacity-100'
+                            }`}
+                            style={{ backgroundColor: c }}
+                          >
+                            {playerColor === c && <Check size={16} strokeWidth={2} className="text-white" />}
+                          </button>
+                        ))}
+                        <input
+                          type="color"
+                          value={playerColor}
+                          onChange={(e) => setPlayerColor(e.target.value)}
+                          className="w-8 h-8 rounded-full border-none bg-transparent cursor-pointer"
+                          title="Colore personalizzato"
+                          aria-label="Colore personalizzato"
+                        />
+                      </div>
+                    </Field>
+
+                    <Button type="submit" size="lg" className="w-full mt-2 gap-2">
+                      <Shield size={18} strokeWidth={1.5} />
+                      <span>Entra in partita</span>
+                    </Button>
+                  </form>
+                </TabsContent>
+              </Tabs>
+            </Card>
+          </div>
+
+          {/* Colonna destra: anteprima della mappa, la pedina prende il colore scelto */}
+          <div className="lg:sticky lg:top-8">
+            <BattleMapPreview color={playerColor} name={playerName} />
+
+            <ul className="mt-8 grid gap-x-8 gap-y-6 sm:grid-cols-2">
+              {FEATURES_LIST.map(({ Icon, title, text }) => (
+                <li key={title} className="flex gap-3">
+                  <Icon size={18} strokeWidth={1.5} className="mt-0.5 shrink-0 text-slate-500" />
+                  <div>
+                    <p className="text-sm text-slate-200">{title}</p>
+                    <p className="text-sm text-slate-400">{text}</p>
                   </div>
-
-                  <Button type="submit" variant="rpgBlue" className="w-full mt-4 py-3.5 text-sm gap-2">
-                    <Shield size={20} />
-                    <span>Entra nel Campo di Battaglia</span>
-                  </Button>
-                </form>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-
-        {/* Feature Highlights Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-8 w-full">
-          <Card className="p-3.5 text-center flex flex-col items-center justify-center border-white/5 hover:border-amber-500/30 transition-colors bg-slate-950/60">
-            <Zap size={22} className="text-amber-400 mb-2" />
-            <span className="text-xs font-semibold text-slate-200">Sync Real-Time</span>
-            <span className="text-[10px] text-slate-400">WebSocket ultra-veloce</span>
-          </Card>
-
-          <Card className="p-3.5 text-center flex flex-col items-center justify-center border-white/5 hover:border-amber-500/30 transition-colors bg-slate-950/60">
-            <Grid size={22} className="text-blue-400 mb-2" />
-            <span className="text-xs font-semibold text-slate-200">Griglia Tattica</span>
-            <span className="text-[10px] text-slate-400">Snap magnetico a quadretti</span>
-          </Card>
-
-          <Card className="p-3.5 text-center flex flex-col items-center justify-center border-white/5 hover:border-amber-500/30 transition-colors bg-slate-950/60">
-            <Map size={22} className="text-emerald-400 mb-2" />
-            <span className="text-xs font-semibold text-slate-200">Mappe Custom</span>
-            <span className="text-[10px] text-slate-400">Upload JPG/PNG o link</span>
-          </Card>
-
-          <Card className="p-3.5 text-center flex flex-col items-center justify-center border-white/5 hover:border-amber-500/30 transition-colors bg-slate-950/60">
-            <Heart size={22} className="text-red-400 mb-2" />
-            <span className="text-xs font-semibold text-slate-200">Token & HP</span>
-            <span className="text-[10px] text-slate-400">Gestione mostri e PG</span>
-          </Card>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
-      </div>
 
-      {/* Footer */}
-      <footer className="z-10 text-center text-xs text-slate-500 mt-6">
-        D&D Map Manager &copy; {new Date().getFullYear()} &bull; Real-Time Battlespace powered by ShadCN UI
-      </footer>
+        <footer className="py-8 border-t border-white/[0.06] text-xs text-slate-500">
+          Map Manager D&amp;D &copy; {new Date().getFullYear()}
+        </footer>
+      </div>
     </main>
   );
 }
 
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="block mb-2 text-sm text-slate-300">{label}</span>
+      {children}
+      {hint && <span className="block mt-2 text-xs leading-4 text-slate-500">{hint}</span>}
+    </label>
+  );
+}
 
+const FEATURES_LIST = [
+  { Icon: Zap, title: 'In tempo reale', text: 'Ogni mossa arriva subito a tutto il tavolo' },
+  { Icon: Grid, title: 'Griglia tattica', text: 'Le pedine si agganciano ai quadretti' },
+  { Icon: Map, title: 'Le tue mappe', text: "Carica un'immagine JPG o PNG, o incolla un link" },
+  { Icon: Heart, title: 'Pedine e punti vita', text: 'Mostri e personaggi con i loro HP' },
+];
+
+// Anteprima disegnata in codice: due stanze, il gruppo, i goblin e la mossa che stai per fare.
+const CELL = 32;
+const at = (c: number) => c * CELL + CELL / 2;
+
+function BattleMapPreview({ color, name }: { color: string; name: string }) {
+  const initial = (name.trim()[0] || 'V').toUpperCase();
+  const party = [
+    { c: 2, r: 4, color: '#10b981', label: 'M' },
+    { c: 4, r: 2, color: '#8b5cf6', label: 'T' },
+  ];
+  const goblins = [
+    { c: 12, r: 2 },
+    { c: 13, r: 4 },
+  ];
+  const me = { c: 3, r: 6 };
+  const target = { c: 7, r: 5 };
+
+  return (
+    <figure className="rounded-2xl border border-white/[0.08] bg-slate-900 overflow-hidden">
+      <figcaption className="h-10 px-4 flex items-center justify-between border-b border-white/[0.06] text-xs">
+        <span className="font-mono text-slate-400">#campagna-draghi</span>
+        <span className="text-slate-500 tabular-nums">Round 3 · tocca a {name.trim() || 'Valeros'}</span>
+      </figcaption>
+      <svg viewBox="16 16 448 288" className="block w-full h-auto" role="img" aria-label="Anteprima di una mappa di battaglia con griglia e pedine">
+        <defs>
+          <pattern id="bm-grid" width={CELL} height={CELL} patternUnits="userSpaceOnUse">
+            <path d={`M ${CELL} 0 L 0 0 0 ${CELL}`} fill="none" stroke="rgba(239,233,222,0.08)" strokeWidth="1" />
+          </pattern>
+          <radialGradient id="bm-torch" cx="0.22" cy="0.5" r="0.5">
+            <stop offset="0" stopColor="#d9b36c" stopOpacity="0.16" />
+            <stop offset="1" stopColor="#d9b36c" stopOpacity="0" />
+          </radialGradient>
+          <clipPath id="bm-floor">
+            <rect x={32} y={32} width={256} height={256} />
+            <rect x={288} y={128} width={64} height={64} />
+            <rect x={352} y={32} width={96} height={192} />
+          </clipPath>
+        </defs>
+
+        <rect width="480" height="320" fill="#12110f" />
+        <g clipPath="url(#bm-floor)">
+          <rect width="480" height="320" fill="#24211e" />
+          <rect width="480" height="320" fill="url(#bm-torch)" />
+          <rect width="480" height="320" fill="url(#bm-grid)" />
+        </g>
+
+        {/* Muri, con le porte lasciate aperte verso il corridoio */}
+        <path
+          d="M 288 128 L 288 32 L 32 32 L 32 288 L 288 288 L 288 192 M 288 128 L 352 128 L 352 32 L 448 32 L 448 224 L 352 224 L 352 192 L 288 192"
+          fill="none"
+          stroke="#5c5750"
+          strokeWidth="6"
+          strokeLinejoin="round"
+        />
+
+        {/* Forziere */}
+        <rect x={7 * CELL + 6} y={CELL + 9} width={20} height={14} rx={2} fill="#a8803a" />
+        <line x1={7 * CELL + 6} y1={CELL + 14} x2={7 * CELL + 26} y2={CELL + 14} stroke="#654c22" strokeWidth="1.5" />
+
+        {/* La mossa: percorso tratteggiato e il quadretto di arrivo */}
+        <line x1={at(me.c)} y1={at(me.r)} x2={at(target.c)} y2={at(target.r)} stroke="#d9b36c" strokeWidth="2" strokeDasharray="4 4" strokeLinecap="round" />
+        <rect x={target.c * CELL + 2} y={target.r * CELL + 2} width={CELL - 4} height={CELL - 4} rx={3} fill="rgba(217,179,108,0.1)" stroke="#d9b36c" strokeWidth="1.5" strokeDasharray="4 3" />
+        <g transform={`translate(${at(target.c)} ${target.r * CELL - 10})`}>
+          <rect x={-26} y={-10} width={52} height={20} rx={4} fill="#12110f" stroke="rgba(239,233,222,0.12)" />
+          <text textAnchor="middle" y={4} fontSize="11" fontFamily="ui-monospace, monospace" fill="#efe9de">6 m</text>
+        </g>
+
+        {goblins.map(({ c, r }) => (
+          <Token key={`${c}-${r}`} x={at(c)} y={at(r)} color="#7f1d1d" label="G" />
+        ))}
+        {party.map((t) => (
+          <Token key={t.label} x={at(t.c)} y={at(t.r)} color={t.color} label={t.label} />
+        ))}
+        <Token x={at(me.c)} y={at(me.r)} color={color} label={initial} />
+      </svg>
+    </figure>
+  );
+}
+
+function Token({ x, y, color, label }: { x: number; y: number; color: string; label: string }) {
+  return (
+    <g transform={`translate(${x} ${y})`}>
+      <circle r={12} fill={color} stroke="rgba(255,255,255,0.75)" strokeWidth="2" />
+      <text textAnchor="middle" y={4} fontSize="12" fontWeight="500" fontFamily="Outfit, sans-serif" fill="#fff">
+        {label}
+      </text>
+    </g>
+  );
+}

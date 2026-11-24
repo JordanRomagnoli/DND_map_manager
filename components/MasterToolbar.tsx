@@ -26,6 +26,15 @@ import {
   EyeOff,
   Bomb,
   CloudLightning,
+  CloudRain,
+  Snowflake,
+  SunMedium,
+  Sunset,
+  Moon,
+  Flame,
+  Vibrate,
+  Zap,
+  type LucideIcon,
 } from 'lucide-react';
 
 import { Ambience, MapEffect, MapFeatureKind, RoomState } from '@/lib/types';
@@ -54,23 +63,24 @@ const MEASURE_TOOLS: { kind: MeasureKind; label: string; icon: React.ReactNode }
   { kind: 'line', label: 'Linea', icon: <MoveRight size={18} /> },
 ];
 
-const WEATHERS: { value: Ambience['weather']; label: string }[] = [
-  { value: 'none', label: '☀️ Sereno' },
-  { value: 'rain', label: '🌧️ Pioggia' },
-  { value: 'storm', label: '⛈️ Tempesta' },
-  { value: 'snow', label: '❄️ Neve' },
-  { value: 'mist', label: '🌫️ Nebbia' },
+type AmbienceOption<T> = { value: T; label: string; Icon: LucideIcon };
+const WEATHERS: AmbienceOption<Ambience['weather']>[] = [
+  { value: 'none', label: 'Sereno', Icon: Sun },
+  { value: 'rain', label: 'Pioggia', Icon: CloudRain },
+  { value: 'storm', label: 'Tempesta', Icon: CloudLightning },
+  { value: 'snow', label: 'Neve', Icon: Snowflake },
+  { value: 'mist', label: 'Nebbia', Icon: CloudFog },
 ];
-const LIGHTS: { value: Ambience['light']; label: string }[] = [
-  { value: 'day', label: '🌞 Giorno' },
-  { value: 'dusk', label: '🌇 Tramonto' },
-  { value: 'night', label: '🌙 Notte' },
-  { value: 'fire', label: '🔥 Fuoco' },
+const LIGHTS: AmbienceOption<Ambience['light']>[] = [
+  { value: 'day', label: 'Giorno', Icon: SunMedium },
+  { value: 'dusk', label: 'Tramonto', Icon: Sunset },
+  { value: 'night', label: 'Notte', Icon: Moon },
+  { value: 'fire', label: 'Fuoco', Icon: Flame },
 ];
-const EFFECTS: { value: MapEffect; label: string }[] = [
-  { value: 'shake', label: '🫨 Scossa' },
-  { value: 'lightning', label: '⚡ Fulmine' },
-  { value: 'explosion', label: '💥 Esplosione' },
+const EFFECTS: AmbienceOption<MapEffect>[] = [
+  { value: 'shake', label: 'Scossa', Icon: Vibrate },
+  { value: 'lightning', label: 'Fulmine', Icon: Zap },
+  { value: 'explosion', label: 'Esplosione', Icon: Bomb },
 ];
 
 const BRUSH_COLORS = ['#1e293b', '#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#ffffff'];
@@ -92,18 +102,18 @@ const ToolButton = React.forwardRef<
     type="button"
     aria-pressed={active}
     className={cn(
-      'flex flex-col items-center justify-center gap-1 min-w-[58px] h-[52px] px-2 rounded-xl border shrink-0 transition-colors',
+      'flex flex-col items-center justify-center gap-1 min-w-14 h-12 px-2 rounded-lg border shrink-0 transition-colors',
       active
-        ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-md shadow-amber-500/30'
+        ? 'bg-amber-400 text-slate-950 border-transparent'
         : danger
           ? 'text-red-400 border-transparent hover:bg-red-500/15'
-          : 'text-slate-300 border-transparent hover:bg-slate-800 hover:text-amber-300',
+          : 'text-slate-300 border-transparent hover:bg-slate-800 hover:text-white',
       className
     )}
     {...props}
   >
     {icon}
-    <span className="text-[10px] font-semibold leading-none whitespace-nowrap">{label}</span>
+    <span className="text-[11px] font-medium leading-none whitespace-nowrap">{label}</span>
   </button>
 ));
 ToolButton.displayName = 'ToolButton';
@@ -112,7 +122,7 @@ ToolButton.displayName = 'ToolButton';
 function ToolGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center gap-0.5 shrink-0">
-      <span className="hidden sm:block text-[9px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
+      <span className="hidden sm:block text-[11px] font-medium text-slate-500">{label}</span>
       <div className="flex items-center gap-1">{children}</div>
     </div>
   );
@@ -355,7 +365,7 @@ export default function MasterToolbar({
                   aria-pressed={brushColor === color}
                   onClick={() => setBrushColor(color)}
                   className={`w-6 h-6 rounded-full border-2 transition-transform ${
-                    brushColor === color ? 'border-amber-300 scale-110' : 'border-white/20 hover:scale-110'
+                    brushColor === color ? 'border-amber-300 scale-110' : 'border-white/20'
                   }`}
                   style={{ backgroundColor: color }}
                 />
@@ -379,7 +389,7 @@ export default function MasterToolbar({
                   type="button"
                   aria-pressed={brushWidth === width}
                   onClick={() => setBrushWidth(width)}
-                  className={`h-8 px-2.5 rounded-md text-[11px] font-semibold transition-colors ${
+                  className={`h-8 px-2.5 rounded-md text-[11px] font-medium transition-colors ${
                     brushWidth === width ? 'bg-amber-400 text-slate-950' : 'text-slate-300 hover:text-white'
                   }`}
                 >
@@ -443,35 +453,35 @@ export default function MasterToolbar({
 
         <div className="glass-panel flex items-end gap-1 px-2 py-1.5 max-w-full overflow-x-auto">
           <ToolGroup label="Vista">
-            <ToolButton icon={<MousePointer size={20} />} label="Seleziona" active={activeTool === 'select'} onClick={() => setActiveTool('select')} />
-            <ToolButton icon={<Hand size={20} />} label="Sposta" active={activeTool === 'pan'} onClick={() => setActiveTool('pan')} />
+            <ToolButton icon={<MousePointer size={18} />} label="Seleziona" active={activeTool === 'select'} onClick={() => setActiveTool('select')} />
+            <ToolButton icon={<Hand size={18} />} label="Sposta" active={activeTool === 'pan'} onClick={() => setActiveTool('pan')} />
           </ToolGroup>
 
           <Divider />
 
           <ToolGroup label="Strumenti">
             <ToolButton
-              icon={<Pencil size={20} />}
+              icon={<Pencil size={18} />}
               label="Disegna"
               active={isDrawTool}
               onClick={() => !isDrawTool && setActiveTool('brush')}
             />
             <ToolButton
-              icon={<CloudFog size={20} />}
+              icon={<CloudFog size={18} />}
               label={fog.enabled ? 'Nebbia ●' : 'Nebbia'}
               active={isFogTool}
               onClick={handleFogMode}
               title={fog.enabled ? 'La nebbia è attiva: clic per rivelare o ricoprire' : 'Avvolgi la mappa nella nebbia di guerra'}
             />
             <ToolButton
-              icon={<Ruler size={20} />}
+              icon={<Ruler size={18} />}
               label="Misura"
               active={activeTool === 'measure'}
               onClick={() => setActiveTool('measure')}
               title="Righello e aree d'effetto degli incantesimi"
             />
             <ToolButton
-              icon={<Bomb size={20} />}
+              icon={<Bomb size={18} />}
               label="Trappole"
               active={activeTool === 'feature'}
               onClick={() => setActiveTool('feature')}
@@ -482,10 +492,10 @@ export default function MasterToolbar({
           <Divider />
 
           <ToolGroup label="Scena">
-            <ToolButton icon={<ImageIcon size={20} />} label="Mappa" onClick={() => setShowMapModal(true)} title="Carica la mappa di sfondo" />
-            <ToolButton icon={<PlusCircle size={20} />} label="NPC" onClick={() => setShowNpcModal(true)} title="Evoca un nuovo NPC o mostro" />
+            <ToolButton icon={<ImageIcon size={18} />} label="Mappa" onClick={() => setShowMapModal(true)} title="Carica la mappa di sfondo" />
+            <ToolButton icon={<PlusCircle size={18} />} label="NPC" onClick={() => setShowNpcModal(true)} title="Evoca un nuovo NPC o mostro" />
             <ToolButton
-              icon={<ScrollText size={20} />}
+              icon={<ScrollText size={18} />}
               label="Handout"
               onClick={() => handoutInputRef.current?.click()}
               title="Mostra a tutti un'immagine: lettera, ritratto, oggetto"
@@ -494,28 +504,29 @@ export default function MasterToolbar({
 
             <Popover>
               <PopoverTrigger asChild>
-                <ToolButton icon={<CloudLightning size={20} />} label="Atmosfera" title="Meteo, luce ed effetti per tutti" />
+                <ToolButton icon={<CloudLightning size={18} />} label="Atmosfera" title="Meteo, luce ed effetti per tutti" />
               </PopoverTrigger>
-              <PopoverContent className="w-72 p-2 bg-slate-900/95 border-amber-500/30 backdrop-blur-xl shadow-2xl flex flex-col gap-2">
+              <PopoverContent className="w-72 p-2 bg-slate-900/95 border-white/[0.08] backdrop-blur-xl shadow-2xl flex flex-col gap-2">
                 {[
                   { title: 'Meteo', items: WEATHERS, current: room.ambience?.weather ?? 'none', key: 'weather' },
                   { title: 'Luce', items: LIGHTS, current: room.ambience?.light ?? 'day', key: 'light' },
                 ].map(({ title, items, current, key }) => (
                   <div key={key}>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1 pb-1">{title}</div>
+                    <div className="text-[11px] font-medium text-slate-400 px-1 pb-1">{title}</div>
                     <div className="flex flex-wrap gap-1">
-                      {items.map(({ value, label }) => (
+                      {items.map(({ value, label, Icon }) => (
                         <button
                           key={value}
                           type="button"
                           aria-pressed={current === value}
                           onClick={() => socket?.emit('set-ambience', { [key]: value })}
-                          className={`px-2 py-1 rounded-lg border text-[11px] font-semibold ${
+                          className={`inline-flex items-center gap-1.5 h-8 px-2 rounded-md border text-xs ${
                             current === value
-                              ? 'bg-amber-500/20 border-amber-400 text-amber-100'
-                              : 'bg-slate-950 border-slate-700 text-slate-300 hover:text-white'
+                              ? 'bg-amber-400/10 border-amber-400/40 text-amber-200'
+                              : 'bg-slate-800 border-white/[0.08] text-slate-300 hover:text-white hover:bg-slate-700'
                           }`}
                         >
+                          <Icon size={16} strokeWidth={1.5} />
                           {label}
                         </button>
                       ))}
@@ -523,15 +534,16 @@ export default function MasterToolbar({
                   </div>
                 ))}
                 <div>
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1 pb-1">Effetti istantanei</div>
+                  <div className="text-[11px] font-medium text-slate-400 px-1 pb-1">Effetti istantanei</div>
                   <div className="flex flex-wrap gap-1">
-                    {EFFECTS.map(({ value, label }) => (
+                    {EFFECTS.map(({ value, label, Icon }) => (
                       <button
                         key={value}
                         type="button"
                         onClick={() => socket?.emit('map-effect', { kind: value })}
-                        className="px-2 py-1 rounded-lg border border-red-500/40 bg-red-950/30 text-[11px] font-semibold text-red-100 hover:bg-red-900/40"
+                        className="inline-flex items-center gap-1.5 h-8 px-2 rounded-md border border-white/[0.08] bg-slate-800 text-xs text-slate-200 hover:bg-slate-700"
                       >
+                        <Icon size={16} strokeWidth={1.5} />
                         {label}
                       </button>
                     ))}
@@ -542,10 +554,10 @@ export default function MasterToolbar({
 
             <Popover>
               <PopoverTrigger asChild>
-                <ToolButton icon={<Layers size={20} />} label="Scene" title="Prepara più mappe e passa dall'una all'altra" />
+                <ToolButton icon={<Layers size={18} />} label="Scene" title="Prepara più mappe e passa dall'una all'altra" />
               </PopoverTrigger>
-              <PopoverContent className="w-64 p-1.5 bg-slate-900/95 border-amber-500/30 backdrop-blur-xl shadow-2xl flex flex-col gap-1">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">
+              <PopoverContent className="w-64 p-1.5 bg-slate-900/95 border-white/[0.08] backdrop-blur-xl shadow-2xl flex flex-col gap-1">
+                <div className="text-[11px] font-medium text-slate-400 px-2 py-1">
                   Scene della campagna
                 </div>
                 {(room.scenes ?? []).map((scene) => {
@@ -558,13 +570,13 @@ export default function MasterToolbar({
                         aria-current={current}
                         className={`flex-1 min-w-0 justify-start gap-2 text-xs h-8 ${
                           current
-                            ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30'
+                            ? 'bg-amber-400/10 text-amber-200 border border-amber-400/25'
                             : 'text-slate-200 hover:bg-slate-800'
                         }`}
                         onClick={() => !current && sceneAction('switch-scene', { sceneId: scene.id })}
                       >
                         <span className="truncate">{scene.name}</span>
-                        {current && <span className="ml-auto text-[10px] font-semibold opacity-80">in corso</span>}
+                        {current && <span className="ml-auto text-[11px] font-medium opacity-80">in corso</span>}
                       </Button>
                       {!current && (
                         <button
@@ -591,7 +603,7 @@ export default function MasterToolbar({
                 >
                   <PlusCircle size={14} /> Nuova scena
                 </Button>
-                <p className="px-2 py-1 text-[10px] text-slate-400 leading-snug">
+                <p className="px-2 py-1 text-[11px] text-slate-400 leading-snug">
                   Ogni scena ricorda mappa, disegni, nebbia e NPC. Le pedine dei giocatori passano da una scena all'altra.
                 </p>
               </PopoverContent>
@@ -603,22 +615,22 @@ export default function MasterToolbar({
           <ToolGroup label="Griglia">
             <Popover>
               <PopoverTrigger asChild>
-                <ToolButton icon={<Grid size={20} />} label={`${room.gridScale || 1} m`} title="Griglia e scala" />
+                <ToolButton icon={<Grid size={18} />} label={`${room.gridScale || 1} m`} title="Griglia e scala" />
               </PopoverTrigger>
-              <PopoverContent className="w-56 p-2 bg-slate-900/95 border-amber-500/30 backdrop-blur-xl shadow-2xl flex flex-col gap-2 text-xs">
+              <PopoverContent className="w-56 p-2 bg-slate-900/95 border-white/[0.08] backdrop-blur-xl shadow-2xl flex flex-col gap-2 text-xs">
                 <Button
                   variant="ghost"
                   size="sm"
                   className={`justify-start gap-2 text-xs h-8 ${
-                    room.gridVisible ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30' : 'text-slate-200 hover:bg-slate-800'
+                    room.gridVisible ? 'bg-amber-400/10 text-amber-200 border border-amber-400/25' : 'text-slate-200 hover:bg-slate-800'
                   }`}
                   onClick={handleToggleGrid}
                 >
-                  <Grid size={16} className="text-amber-400" />
+                  <Grid size={16} className="text-slate-400" />
                   <span>{room.gridVisible ? 'Griglia visibile' : 'Griglia nascosta'}</span>
                 </Button>
-                <div className="flex items-center gap-1.5 px-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  <Ruler size={12} className="text-amber-400" /> Metri per quadretto
+                <div className="flex items-center gap-1.5 px-1 text-[11px] font-medium text-slate-400">
+                  <Ruler size={12} className="text-slate-400" /> Metri per quadretto
                 </div>
                 <div className="grid grid-cols-3 gap-1">
                   {[0.5, 1, 1.5, 2, 3, 5].map((scale) => (
@@ -628,7 +640,7 @@ export default function MasterToolbar({
                       size="sm"
                       className={`h-7 text-xs ${
                         (room.gridScale || 1) === scale
-                          ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40'
+                          ? 'bg-amber-400/10 text-amber-200 border border-amber-400/25'
                           : 'text-slate-300 hover:bg-slate-800'
                       }`}
                       onClick={() => socket?.emit('update-grid', { roomId: room.id, gridScale: scale })}
@@ -648,8 +660,8 @@ export default function MasterToolbar({
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              <Sparkles size={22} className="text-amber-400" />
-              <span>Evoca Nuovo NPC / Mostro</span>
+              <Sparkles size={22} className="text-slate-400" />
+              <span>Nuovo NPC o mostro</span>
             </DialogTitle>
             <DialogDescription>
               Crea un nuovo token controllato dal Master e posizionalo sul campo di battaglia.
@@ -658,22 +670,22 @@ export default function MasterToolbar({
 
           <form onSubmit={handleAddNpc} className="space-y-4 mt-2">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
-                Nome Personaggio / Mostro
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                Nome del personaggio o mostro
               </label>
               <Input
                 type="text"
                 value={npcName}
                 onChange={(e) => setNpcName(e.target.value)}
-                placeholder="Es. Goblin Arciere, Drago Rosso"
+                placeholder="Es. Goblin arciere, Drago rosso"
                 required
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
-                  Punti Vita (HP)
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                  Punti vita (HP)
                 </label>
                 <Input
                   type="number"
@@ -683,8 +695,8 @@ export default function MasterToolbar({
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
-                  Colore Token
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                  Colore della pedina
                 </label>
                 <div className="flex items-center gap-2.5 bg-slate-900/60 p-2 rounded-xl border border-slate-800 h-10">
                   <input
@@ -693,7 +705,7 @@ export default function MasterToolbar({
                     onChange={(e) => setNpcColor(e.target.value)}
                     className="w-7 h-7 rounded cursor-pointer border-none bg-transparent"
                   />
-                  <span className="text-xs font-mono font-semibold text-slate-300">{npcColor}</span>
+                  <span className="text-xs font-mono font-medium text-slate-300">{npcColor}</span>
                 </div>
               </div>
             </div>
@@ -710,8 +722,8 @@ export default function MasterToolbar({
 
             {/* Immagine Pedina NPC (Opzionale) */}
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
-                Immagine Pedina / Avatar (Opzionale)
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                Immagine della pedina (facoltativa)
               </label>
               <div className="flex items-center gap-3 bg-slate-900/60 p-2 rounded-xl border border-slate-800">
                 {npcAvatarUrl ? (
@@ -722,7 +734,7 @@ export default function MasterToolbar({
                   />
                 ) : (
                   <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs border border-white/20 shrink-0"
+                    className="w-10 h-10 rounded-full flex items-center justify-center font-medium text-xs border border-white/20 shrink-0"
                     style={{ backgroundColor: npcColor }}
                   >
                     {npcName[0]?.toUpperCase() || 'N'}
@@ -741,7 +753,7 @@ export default function MasterToolbar({
                     <Button variant="secondary" size="sm" asChild className="h-7 text-xs flex-1">
                       <label htmlFor="npc-avatar-file-input" className="cursor-pointer gap-1 justify-center">
                         <Upload size={12} />
-                        <span>Carica Foto</span>
+                        <span>Carica foto</span>
                       </label>
                     </Button>
                     {npcAvatarUrl && (
@@ -761,7 +773,7 @@ export default function MasterToolbar({
             </div>
 
             <Button type="submit" variant="rpgGold" className="w-full mt-4 text-sm">
-              Aggiungi Token NPC alla Mappa
+              Aggiungi alla mappa
             </Button>
           </form>
         </DialogContent>
@@ -772,8 +784,8 @@ export default function MasterToolbar({
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              <ImageIcon size={22} className="text-amber-400" />
-              <span>Sfondo Mappa di Gioco</span>
+              <ImageIcon size={22} className="text-slate-400" />
+              <span>Sfondo della mappa</span>
             </DialogTitle>
             <DialogDescription>
               Carica un'immagine per la mappa di sfondo oppure specifica un link URL.
@@ -781,9 +793,9 @@ export default function MasterToolbar({
           </DialogHeader>
 
           {/* Opzione 1: Upload File Locale JPG/PNG */}
-          <div className="mt-2 p-5 rounded-xl bg-slate-900/60 border-2 border-dashed border-amber-500/40 text-center hover:border-amber-400 transition-colors">
-            <Upload size={30} className="mx-auto mb-2 text-amber-400 animate-bounce" />
-            <p className="text-sm font-semibold text-slate-200 mb-1">Carica Mappa dal PC</p>
+          <div className="mt-2 p-5 rounded-xl bg-slate-900/60 border-2 border-dashed border-white/[0.08] text-center hover:border-amber-400 transition-colors">
+            <Upload size={30} className="mx-auto mb-2 text-slate-400" />
+            <p className="text-sm font-medium text-slate-200 mb-1">Carica dal computer</p>
             <p className="text-xs text-slate-400 mb-3">Formati supportati: JPG, PNG, WEBP</p>
             <input
               type="file"
@@ -794,7 +806,7 @@ export default function MasterToolbar({
             />
             <Button variant="secondary" asChild className="text-xs">
               <label htmlFor="map-file-input" className="cursor-pointer">
-                Seleziona File Immagine
+                Scegli un file immagine
               </label>
             </Button>
           </div>
@@ -802,8 +814,8 @@ export default function MasterToolbar({
           {/* Opzione 2: Caricamento via Link URL */}
           <form onSubmit={handleUrlUpload} className="space-y-3 mt-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
-                Oppure Inserisci URL Immagine Mappa
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                Oppure incolla un link all'immagine
               </label>
               <Input
                 type="url"
@@ -824,7 +836,7 @@ export default function MasterToolbar({
             onClick={handleResetBackground}
             className="w-full text-xs mt-2"
           >
-            Ripristina Foglio Bianco Predefinito
+            Torna al foglio bianco
           </Button>
         </DialogContent>
       </Dialog>

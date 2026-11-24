@@ -8,7 +8,7 @@ import { FEATURES } from '@/lib/utils';
 const ALERT_MS = 6000;
 const STYLES = {
   trap: 'bg-red-600 border-red-300 shadow-red-500/40 text-white',
-  chest: 'bg-amber-400 border-amber-200 shadow-amber-500/40 text-slate-950',
+  chest: 'bg-amber-400 border-amber-200 text-slate-950',
   trigger: 'bg-violet-600 border-violet-300 shadow-violet-500/40 text-white',
   door: 'bg-slate-700 border-slate-400 text-white', // le porte non scattano: qui solo per completezza del tipo
 };
@@ -54,8 +54,8 @@ export default function FeatureAlert({ socket }: { socket: Socket | null }) {
     >
       <span className="text-3xl">{FEATURES[feature.kind].done}</span>
       <span className="text-left">
-        <span className="block text-base font-extrabold rpg-font">{title}</span>
-        <span className="block text-xs font-semibold opacity-90 whitespace-pre-wrap">
+        <span className="block text-base font-medium">{title}</span>
+        <span className="block text-xs font-medium opacity-90 whitespace-pre-wrap">
           {feature.kind === 'trap' && `${tokenName} l'ha fatta scattare. `}
           {feature.kind === 'trigger' && `Attivato da ${tokenName}. `}
           {feature.text}

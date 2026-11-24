@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'D&D Map Manager - Real-Time Battlespace',
-  description: 'Gestisci stanze, griglie tattiche, mappe personalizzate e token per Dungeons & Dragons in tempo reale con WebSockets.',
+  title: 'Map Manager D&D',
+  description: 'La mappa di battaglia per Dungeons & Dragons: il Master prepara la scena, i giocatori muovono le pedine dal telefono, in tempo reale.',
 };
 
 export default function RootLayout({

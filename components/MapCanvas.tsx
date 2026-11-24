@@ -541,7 +541,7 @@ export default function MapCanvas({
       const gridSteps = Math.round(Math.hypot(colDiff, rowDiff));
       const metersMoved = Math.round(gridSteps * (room.gridScale || 1) * 10) / 10;
 
-      const hudText = `📏 ${metersMoved}m (${gridSteps} ${gridSteps === 1 ? 'quadretto' : 'quadretti'})`;
+      const hudText = `${metersMoved} m (${gridSteps} ${gridSteps === 1 ? 'quadretto' : 'quadretti'})`;
       ctx.font = `bold ${Math.max(12, 13 / zoom)}px Outfit, sans-serif`;
       const textWidth = ctx.measureText(hudText).width;
       const padding = 6 / zoom;
@@ -1222,15 +1222,15 @@ export default function MapCanvas({
         <button
           onClick={handleZoomOut}
           className="btn-icon w-9 h-9 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800"
-          title="Zoom Indietro"
+          title="Riduci zoom"
         >
           <Minus size={16} />
         </button>
 
         <button
           onClick={handleResetZoom}
-          className="px-2.5 py-1 text-xs font-mono font-bold text-amber-300 hover:text-white transition-colors"
-          title="Ripristina Zoom 100%"
+          className="px-2.5 py-1 text-xs font-mono font-medium text-amber-300 hover:text-white transition-colors"
+          title="Zoom al 100%"
         >
           {Math.round(zoom * 100)}%
         </button>
@@ -1238,7 +1238,7 @@ export default function MapCanvas({
         <button
           onClick={handleZoomIn}
           className="btn-icon w-9 h-9 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800"
-          title="Zoom Avanti"
+          title="Aumenta zoom"
         >
           <Plus size={16} />
         </button>
@@ -1248,7 +1248,7 @@ export default function MapCanvas({
         <button
           onClick={handleResetZoom}
           className="btn-icon w-9 h-9 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800"
-          title="Centra Mappa"
+          title="Centra la mappa"
         >
           <Maximize2 size={15} />
         </button>
@@ -1260,7 +1260,7 @@ export default function MapCanvas({
 
       {/* DIALOG POPOVER MODALE HP TOKEN */}
       <Dialog open={!!hpModalToken} onOpenChange={(open) => !open && setHpModalToken(null)}>
-        <DialogContent className="bg-slate-900/95 text-slate-100 border-amber-500/30 backdrop-blur-xl max-w-sm rounded-2xl p-6 shadow-2xl shadow-amber-950/20">
+        <DialogContent className="bg-slate-900/95 text-slate-100 border-white/[0.08] backdrop-blur-xl max-w-sm rounded-2xl p-6 shadow-2xl">
           {hpModalToken && (
             <div className="flex flex-col gap-5">
               <DialogHeader>
@@ -1271,7 +1271,7 @@ export default function MapCanvas({
                       className="w-4 h-4 rounded-full border border-white/30 shadow-sm shrink-0"
                       style={{ backgroundColor: hpModalToken.color }}
                     />
-                    <DialogTitle className="text-xl font-bold rpg-font text-amber-200 truncate">
+                    <DialogTitle className="text-xl font-medium text-slate-100 truncate">
                       {hpModalToken.name}
                     </DialogTitle>
                   </div>
@@ -1289,15 +1289,15 @@ export default function MapCanvas({
               {/* Sezione Modifica Avatar Pedina (Master o Proprietario Token) */}
               {(role === 'MASTER' || hpModalToken.id === myTokenId || hpModalToken.ownerId === socket?.id) && (
                 <div className="p-3 bg-slate-950/60 rounded-xl border border-white/10 space-y-2">
-                  <div className="flex items-center justify-between text-xs font-semibold">
+                  <div className="flex items-center justify-between text-xs font-medium">
                     <span className="flex items-center gap-1.5 text-amber-300">
-                      <Camera className="w-3.5 h-3.5 text-amber-400" /> Immagine Pedina
+                      <Camera className="w-3.5 h-3.5 text-slate-400" /> Immagine della pedina
                     </span>
                     {hpModalToken.avatarUrl && (
                       <button
                         type="button"
                         onClick={handleRemoveAvatar}
-                        className="text-[10px] text-red-400 hover:underline flex items-center gap-0.5"
+                        className="text-[11px] text-red-400 hover:underline flex items-center gap-0.5"
                       >
                         <Trash2 className="w-3 h-3" /> Rimuovi
                       </button>
@@ -1313,7 +1313,7 @@ export default function MapCanvas({
                       />
                     ) : (
                       <div
-                        className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-xs border-2 border-white/20 shrink-0"
+                        className="w-11 h-11 rounded-full flex items-center justify-center text-white font-medium text-xs border-2 border-white/20 shrink-0"
                         style={{ backgroundColor: hpModalToken.color }}
                       >
                         {hpModalToken.name[0]?.toUpperCase()}
@@ -1342,13 +1342,13 @@ export default function MapCanvas({
               {/* Condizioni: si aggiungono dalla select e si tolgono con un clic, visibili a tutti sopra la pedina */}
               {(role === 'MASTER' || hpModalToken.id === myTokenId || hpModalToken.ownerId === socket?.id) && (
                 <div className="p-3 bg-slate-950/60 rounded-xl border border-white/10 space-y-2">
-                  <span className="flex items-center gap-1.5 text-xs font-semibold text-violet-300">
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-violet-300">
                     <Activity className="w-3.5 h-3.5 text-violet-400" /> Condizioni
                   </span>
                   <select
                     value=""
                     onChange={(e) => toggleCondition(e.target.value)}
-                    className="w-full h-9 px-2.5 rounded-lg bg-slate-900/80 border border-slate-700/60 text-xs font-semibold text-slate-200 cursor-pointer outline-none hover:border-violet-400"
+                    className="w-full h-9 px-2.5 rounded-lg bg-slate-900/80 border border-slate-700/60 text-xs font-medium text-slate-200 cursor-pointer outline-none hover:border-violet-400"
                   >
                     <option value="" disabled>
                       Aggiungi una condizione…
@@ -1367,7 +1367,7 @@ export default function MapCanvas({
                           type="button"
                           onClick={() => toggleCondition(name)}
                           title="Clic per togliere"
-                          className="px-2 py-1 rounded-lg text-[11px] font-semibold border bg-violet-500/25 border-violet-500/70 text-violet-100 hover:bg-violet-500/40"
+                          className="px-2 py-1 rounded-lg text-[11px] font-medium border bg-violet-500/25 border-violet-500/70 text-violet-100 hover:bg-violet-500/40"
                         >
                           {conditionIcon(name)} {name} ✕
                         </button>
@@ -1381,7 +1381,7 @@ export default function MapCanvas({
               {(role === 'MASTER' || hpModalToken.id === myTokenId || hpModalToken.ownerId === socket?.id) &&
                 room.tokens.length > 1 && (
                   <div className="p-3 bg-slate-950/60 rounded-xl border border-white/10 space-y-2">
-                    <span className="flex items-center gap-1.5 text-xs font-semibold text-red-300">
+                    <span className="flex items-center gap-1.5 text-xs font-medium text-red-300">
                       <Swords className="w-3.5 h-3.5 text-red-400" /> In combattimento con
                     </span>
                     <div className="flex flex-wrap gap-1.5">
@@ -1397,7 +1397,7 @@ export default function MapCanvas({
                               type="button"
                               aria-pressed={engaged}
                               onClick={() => socket?.emit('toggle-engagement', { tokenId: hpModalToken.id, targetId: t.id })}
-                              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors ${
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors ${
                                 engaged
                                   ? 'bg-red-500/25 border-red-500/70 text-red-200'
                                   : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'
@@ -1413,9 +1413,9 @@ export default function MapCanvas({
 
               {/* Progress bar HP attuale */}
               <div className="space-y-2">
-                <div className="flex justify-between items-center text-xs font-semibold">
+                <div className="flex justify-between items-center text-xs font-medium">
                   <span className="flex items-center gap-1 text-slate-300">
-                    <Heart className="w-3.5 h-3.5 text-red-400 fill-red-400/20" /> Salute Attuale
+                    <Heart className="w-3.5 h-3.5 text-red-400 fill-red-400/20" /> Salute attuale
                   </span>
                   <span className="font-mono text-amber-300">
                     {inputHp} / {inputMaxHp} HP
@@ -1437,18 +1437,18 @@ export default function MapCanvas({
                     type="number"
                     value={inputHp}
                     onChange={(e) => setInputHp(parseInt(e.target.value) || 0)}
-                    className="bg-slate-800/80 border-slate-700 text-white font-mono text-center font-bold focus:ring-amber-500 focus:border-amber-500"
+                    className="bg-slate-800/80 border-slate-700 text-white font-mono text-center font-medium focus:ring-amber-500 focus:border-amber-500"
                   />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-slate-300 flex items-center gap-1">
-                    <Heart className="w-3 h-3 text-amber-400" /> HP Massimi
+                    <Heart className="w-3 h-3 text-slate-400" /> HP massimi
                   </label>
                   <Input
                     type="number"
                     value={inputMaxHp}
                     onChange={(e) => setInputMaxHp(parseInt(e.target.value) || 1)}
-                    className="bg-slate-800/80 border-slate-700 text-white font-mono text-center font-bold focus:ring-amber-500 focus:border-amber-500"
+                    className="bg-slate-800/80 border-slate-700 text-white font-mono text-center font-medium focus:ring-amber-500 focus:border-amber-500"
                   />
                 </div>
               </div>
@@ -1514,7 +1514,7 @@ export default function MapCanvas({
                 </Button>
                 <Button
                   type="button"
-                  className="flex-1 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-600/20"
+                  className="flex-1 bg-amber-600 hover:bg-amber-500 text-slate-950 font-medium shadow-lg"
                   onClick={() => handleSaveHp(inputHp, inputMaxHp)}
                 >
                   <Check className="w-4 h-4 mr-1.5" /> Salva HP

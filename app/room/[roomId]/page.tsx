@@ -385,14 +385,14 @@ export default function GameRoomPage() {
   if (promptPassword || authError) {
     return (
       <main className="min-h-screen flex items-center justify-center p-4 bg-slate-950 text-slate-100">
-        <Card className="w-full max-w-md text-center border-amber-500/30 p-4 shadow-2xl">
+        <Card className="w-full max-w-md text-center border-white/[0.08] p-4 shadow-2xl">
           <CardHeader className="items-center pb-2">
-            <div className="w-14 h-14 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mb-2 border border-amber-500/30 shadow-gold-glow">
+            <div className="w-14 h-14 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mb-2 border border-white/[0.08]">
               <KeyRound size={28} />
             </div>
-            <CardTitle className="text-2xl text-white rpg-font">Accesso Stanza Riservata</CardTitle>
+            <CardTitle className="text-2xl text-white">Stanza protetta</CardTitle>
             <CardDescription className="text-xs sm:text-sm text-slate-400">
-              La stanza <span className="text-amber-300 font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">{roomId}</span> richiede una password di verifica.
+              La stanza <span className="text-amber-300 font-mono font-medium px-1.5 py-0.5 rounded bg-amber-500/10 border border-white/[0.08]">{roomId}</span> richiede una password di verifica.
             </CardDescription>
           </CardHeader>
 
@@ -410,7 +410,7 @@ export default function GameRoomPage() {
                 value={inputPassword}
                 onChange={(e) => setInputPassword(e.target.value)}
                 placeholder={role === 'MASTER' ? 'Inserisci la password del Master' : 'Inserisci password stanza'}
-                className="text-center font-mono tracking-wider"
+                className="text-center font-mono"
                 required
                 autoFocus
               />
@@ -443,9 +443,9 @@ export default function GameRoomPage() {
   if (tokenChoices && !room) {
     return (
       <main className="min-h-screen flex items-center justify-center p-4 bg-slate-950 text-slate-100">
-        <Card className="w-full max-w-md text-center border-amber-500/30 p-4 shadow-2xl">
+        <Card className="w-full max-w-md text-center border-white/[0.08] p-4 shadow-2xl">
           <CardHeader className="items-center pb-2">
-            <CardTitle className="text-2xl text-white rpg-font">Qual è il tuo personaggio?</CardTitle>
+            <CardTitle className="text-2xl text-white">Qual è il tuo personaggio?</CardTitle>
             <CardDescription className="text-xs sm:text-sm text-slate-400">
               Nella stanza <span className="font-mono text-amber-300">{roomId}</span> ci sono personaggi senza giocatore
               collegato. Tocca il tuo per riprenderlo.
@@ -457,7 +457,7 @@ export default function GameRoomPage() {
                 key={t.id}
                 type="button"
                 onClick={() => joinRoomRef.current({ claimTokenId: t.id })}
-                className="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-900/80 border border-slate-700 hover:border-amber-500/60 text-left"
+                className="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-900/80 border border-slate-700 hover:border-white/15 text-left"
               >
                 {t.avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -467,7 +467,7 @@ export default function GameRoomPage() {
                     {t.name[0]?.toUpperCase()}
                   </span>
                 )}
-                <span className="font-semibold text-slate-100">{t.name}</span>
+                <span className="font-medium text-slate-100">{t.name}</span>
               </button>
             ))}
             <Button
@@ -487,8 +487,8 @@ export default function GameRoomPage() {
   if (!room) {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-white">
-        <div className="w-14 h-14 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mb-4 shadow-gold-glow" />
-        <p className="font-bold text-sm sm:text-base rpg-font text-amber-300 tracking-wider">
+        <div className="w-14 h-14 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="font-medium text-sm sm:text-base text-amber-300">
           Connessione alla Stanza <span className="font-mono">{roomId}</span>...
         </p>
       </main>
@@ -509,26 +509,26 @@ export default function GameRoomPage() {
         </Button>
 
         <div className="rounded-xl bg-slate-950/80 border border-white/10 px-3.5 py-1.5 flex items-center gap-3 text-xs shadow-lg backdrop-blur-md">
-          <div className="flex items-center gap-1.5 font-bold text-slate-200">
-            <span className="text-amber-400 font-mono">#{room.id}</span>
+          <div className="flex items-center gap-1.5 font-medium text-slate-200">
+            <span className="text-slate-400 font-mono">#{room.id}</span>
           </div>
 
           <Button
             variant="ghost"
             size="sm"
             onClick={handleCopyCode}
-            className="h-7 px-2.5 text-[11px] font-semibold text-slate-400 hover:text-amber-300 bg-slate-800/60 border border-white/5 gap-1.5"
+            className="h-7 px-2.5 text-[11px] font-medium text-slate-400 hover:text-amber-300 bg-slate-800/60 border border-white/5 gap-1.5"
             title="Copia codice stanza"
           >
             {copiedCode ? (
               <>
                 <Check size={14} className="text-emerald-400" />
-                <span className="text-emerald-400">Copiato!</span>
+                <span className="text-emerald-400">Copiato</span>
               </>
             ) : (
               <>
                 <Copy size={14} />
-                <span className="hidden sm:inline">Copia Codice</span>
+                <span className="hidden sm:inline">Copia codice</span>
               </>
             )}
           </Button>
@@ -537,7 +537,7 @@ export default function GameRoomPage() {
 
           {role === 'MASTER' ? (
             <Badge variant="master" className="gap-1 px-2.5 py-1">
-              <Crown size={14} className="text-amber-400" /> Master
+              <Crown size={14} className="text-slate-400" /> Master
             </Badge>
           ) : (
             <Badge variant="player" className="gap-1 px-2.5 py-1">

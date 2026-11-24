@@ -70,7 +70,7 @@ export default function InitiativePanel({ room, role, socket, myTokenId }: Initi
             initiative ? 'border-amber-500/70 text-amber-300 hover:text-amber-200' : 'border-slate-700 text-slate-200 hover:text-white'
           }`}
         >
-          <Swords className="w-4 h-4 text-amber-400" />
+          <Swords className="w-4 h-4 text-slate-400" />
           <span className={`${initiative ? '' : 'hidden sm:inline'} font-medium text-xs`}>
             {initiative ? `Round ${initiative.round} · ${tokenName(initiative.activeTokenId)}` : 'Iniziativa'}
           </span>
@@ -84,11 +84,11 @@ export default function InitiativePanel({ room, role, socket, myTokenId }: Initi
         {/* Header */}
         <div className="flex items-center justify-between p-3 border-b border-slate-800/80 bg-slate-900/50">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-              <Swords className="w-4 h-4 text-amber-400" />
+            <div className="p-1.5 bg-amber-500/10 border border-white/[0.08] rounded-lg">
+              <Swords className="w-4 h-4 text-slate-400" />
             </div>
             <div>
-              <h4 className="font-semibold text-sm text-slate-100 leading-none">Iniziativa</h4>
+              <h4 className="font-medium text-sm text-slate-100 leading-none">Iniziativa</h4>
               <p className="text-[11px] text-slate-400 mt-0.5">
                 {initiative ? `Combattimento in corso · Round ${initiative.round}` : 'Nessun combattimento in corso'}
               </p>
@@ -124,7 +124,7 @@ export default function InitiativePanel({ room, role, socket, myTokenId }: Initi
                 <div className="token-badge shrink-0" style={{ backgroundColor: token.color }}>
                   {token.name[0]?.toUpperCase()}
                 </div>
-                <span className={`flex-1 min-w-0 truncate font-semibold ${isActive ? 'text-amber-200' : 'text-slate-200'}`}>
+                <span className={`flex-1 min-w-0 truncate font-medium ${isActive ? 'text-amber-200' : 'text-slate-200'}`}>
                   {token.name}
                 </span>
                 {isActive && <Badge variant="master">Di turno</Badge>}
@@ -168,7 +168,7 @@ export default function InitiativePanel({ room, role, socket, myTokenId }: Initi
                 <Play className="w-3.5 h-3.5" /> Inizia combattimento
               </Button>
             )}
-            <p className="text-[10px] text-slate-500 leading-snug">
+            <p className="text-[11px] text-slate-500 leading-snug">
               Solo i movimenti della pedina di turno sono visibili a tutti e registrati. Le pedine senza valore restano
               fuori dal combattimento.
             </p>

@@ -37,7 +37,7 @@ export default function HandoutViewer({ socket, role }: HandoutViewerProps) {
       <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>
-            <ScrollText size={22} className="text-amber-400" />
+            <ScrollText size={22} className="text-slate-400" />
             <span>{handout?.title || 'Handout'}</span>
           </DialogTitle>
           <DialogDescription>Mostrato dal Master a tutto il tavolo.</DialogDescription>

@@ -3,21 +3,21 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const badgeVariants = cva(
-  'inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-bold tracking-wide transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2',
+  'inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2',
   {
     variants: {
       variant: {
         default:
-          'border-amber-500/40 bg-amber-500/10 text-amber-300 shadow-sm shadow-amber-500/10',
+          'border-white/[0.08] bg-slate-800 text-slate-300',
         master:
-          'border-amber-400/50 bg-gradient-to-r from-amber-500/20 to-amber-600/30 text-amber-300 font-extrabold shadow-sm',
+          'border-amber-400/25 bg-amber-400/10 text-amber-300',
         player:
-          'border-blue-400/50 bg-gradient-to-r from-blue-500/20 to-cyan-500/30 text-blue-300 font-bold shadow-sm',
+          'border-white/[0.08] bg-slate-800 text-slate-200',
         npc:
-          'border-red-500/40 bg-red-500/20 text-red-300 font-bold',
+          'border-red-400/25 bg-red-500/10 text-red-300',
         secondary:
-          'border-slate-700 bg-slate-800/80 text-slate-300',
-        outline: 'border-slate-600 text-slate-300',
+          'border-white/[0.08] bg-slate-800 text-slate-400',
+        outline: 'border-white/10 text-slate-300',
       },
     },
     defaultVariants: {

@@ -75,7 +75,7 @@ export default function WhisperPanel({ room, role, socket, myTokenId }: WhisperP
           <MessageCircle className="w-4 h-4 text-violet-400" />
           <span className="hidden sm:inline font-medium text-xs">{isMaster ? 'Sussurri' : 'Sussurra al Master'}</span>
           {unread > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-violet-500 text-white text-[10px] font-bold flex items-center justify-center">
+            <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-violet-500 text-white text-[11px] font-medium flex items-center justify-center">
               {unread}
             </span>
           )}
@@ -93,7 +93,7 @@ export default function WhisperPanel({ room, role, socket, myTokenId }: WhisperP
               <MessageCircle className="w-4 h-4 text-violet-400" />
             </div>
             <div>
-              <h4 className="font-semibold text-sm text-slate-100 leading-none">Sussurri</h4>
+              <h4 className="font-medium text-sm text-slate-100 leading-none">Sussurri</h4>
               <p className="text-[11px] text-slate-400 mt-0.5">
                 {isMaster ? 'Messaggi privati con ogni giocatore' : 'Solo il Master legge i tuoi messaggi'}
               </p>
@@ -123,7 +123,7 @@ export default function WhisperPanel({ room, role, socket, myTokenId }: WhisperP
                       type="button"
                       aria-pressed={p.id === threadId}
                       onClick={() => setChosenId(p.id)}
-                      className={`relative flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-semibold transition-colors ${
+                      className={`relative flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-medium transition-colors ${
                         p.id === threadId
                           ? 'bg-violet-500/25 border-violet-500/70 text-violet-100'
                           : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'
@@ -181,7 +181,7 @@ export default function WhisperPanel({ room, role, socket, myTokenId }: WhisperP
                     mine ? 'bg-violet-600 text-white rounded-br-sm' : 'bg-slate-800 text-slate-100 rounded-bl-sm'
                   }`}
                 >
-                  {!mine && <span className="block text-[10px] font-bold opacity-70">{w.name}</span>}
+                  {!mine && <span className="block text-[11px] font-medium opacity-70">{w.name}</span>}
                   {w.text}
                 </div>
               </div>

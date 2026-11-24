@@ -55,7 +55,7 @@ export default function TokenList({ tokens, role, roomId, socket, myTokenId, sel
 
   return (
     <div
-      className={`sidebar-panel glass-panel border border-amber-500/30 shadow-2xl transition-all duration-300 backdrop-blur-md ${
+      className={`sidebar-panel glass-panel transition-transform duration-300 ${
         isOpen ? 'translate-x-0' : 'translate-x-[260px]'
       }`}
     >
@@ -63,10 +63,10 @@ export default function TokenList({ tokens, role, roomId, socket, myTokenId, sel
       <div className="sidebar-header bg-slate-900/40">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="text-amber-300 hover:text-white flex items-center gap-2 font-bold text-xs rpg-font tracking-wide transition-colors"
+          className="text-amber-300 hover:text-white flex items-center gap-2 font-medium text-xs transition-colors"
         >
           {isOpen ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-          <Users size={18} className="text-amber-400" />
+          <Users size={18} className="text-slate-400" />
           <span>Token in Campo ({tokens.length})</span>
         </button>
       </div>
@@ -108,9 +108,9 @@ export default function TokenList({ tokens, role, roomId, socket, myTokenId, sel
                 e.preventDefault();
                 applyToSelected(-1);
               }}
-              className="flex items-center gap-1.5 p-2 bg-slate-950/80 border-b border-amber-500/20"
+              className="flex items-center gap-1.5 p-2 bg-slate-950/80 border-b border-white/[0.08]"
             >
-              <span className="text-[11px] font-semibold text-amber-300 whitespace-nowrap">{selected.length} sel.</span>
+              <span className="text-[11px] font-medium text-amber-300 whitespace-nowrap">{selected.length} sel.</span>
               <input
                 type="number"
                 min={1}
@@ -171,7 +171,7 @@ export default function TokenList({ tokens, role, roomId, socket, myTokenId, sel
                 const canEditAvatar = role === 'MASTER' || isMine;
 
                 return (
-                  <div key={token.id} className="token-card group hover:border-amber-500/40">
+                  <div key={token.id} className="token-card group hover:border-white/15">
                     <div className="flex items-center gap-3 w-full min-w-0">
                       {role === 'MASTER' && (
                         <input
@@ -203,7 +203,7 @@ export default function TokenList({ tokens, role, roomId, socket, myTokenId, sel
                         {/* il nome ha la precedenza: se non c'è spazio i badge vanno a capo invece di tagliarlo */}
                         <div className="flex flex-wrap items-center justify-between gap-1 mb-0.5">
                           <span
-                            className={`text-xs font-bold break-words min-w-0 ${
+                            className={`text-xs font-medium break-words min-w-0 ${
                               isMine ? 'text-amber-300' : 'text-slate-100'
                             }`}
                           >
@@ -224,8 +224,8 @@ export default function TokenList({ tokens, role, roomId, socket, myTokenId, sel
                         {/* Barra HP Visiva ShadCN Progress (Visibile solo al Master o al proprietario del token) */}
                         {canSeeHp && token.hp !== undefined && (
                           <div className="mt-1">
-                            <div className="flex items-center justify-between text-[10px] text-slate-300 mb-0.5">
-                              <span className="flex items-center gap-1 text-red-400 font-semibold">
+                            <div className="flex items-center justify-between text-[11px] text-slate-300 mb-0.5">
+                              <span className="flex items-center gap-1 text-red-400 font-medium">
                                 <Heart size={12} className="fill-red-500 text-red-500" />
                                 {token.hp} / {token.maxHp || token.hp} HP
                               </span>
@@ -276,7 +276,7 @@ export default function TokenList({ tokens, role, roomId, socket, myTokenId, sel
                           <button
                             onClick={() => handleDeleteToken(token.id)}
                             className="text-slate-500 hover:text-red-400 transition-colors p-1 rounded hover:bg-red-500/10"
-                            title="Rimuovi Token"
+                            title="Rimuovi pedina"
                           >
                             <Trash2 size={16} />
                           </button>

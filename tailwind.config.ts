@@ -1,5 +1,34 @@
 import type { Config } from 'tailwindcss';
 
+// Rampa neutra calda (tavolo di notte) e un solo accento oro pergamena.
+// Rimappano slate/amber così tutti i componenti esistenti la ereditano.
+const warm = {
+  50: '#faf8f4',
+  100: '#f5f1ea',
+  200: '#efe9de',
+  300: '#cdc6ba',
+  400: '#aaa398',
+  500: '#8a847a',
+  600: '#5c5750',
+  700: '#3a3732',
+  800: '#262421',
+  900: '#1c1a18',
+  950: '#12110f',
+};
+const parchment = {
+  50: '#fbf6e8',
+  100: '#f7ecd0',
+  200: '#f0dcae',
+  300: '#e6c98a',
+  400: '#d9b36c',
+  500: '#c49a4f',
+  600: '#a8803a',
+  700: '#86652c',
+  800: '#654c22',
+  900: '#45341a',
+  950: '#2a2010',
+};
+
 const config: Config = {
   content: [
     './pages/**/*.{js,ts,jsx,tsx,mdx}',
@@ -9,24 +38,18 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        rpg: {
-          dark: '#080a10',
-          card: 'rgba(15, 20, 34, 0.88)',
-          panel: '#101422',
-          gold: '#d4af37',
-          'gold-light': '#f5d77f',
-          'gold-dark': '#997a15',
-          accent: '#3b82f6',
-        },
+        slate: warm,
+        amber: parchment,
       },
       fontFamily: {
         rpg: ['Cinzel', 'serif'],
         sans: ['Outfit', 'sans-serif'],
       },
-      boxShadow: {
-        'gold-glow': '0 0 20px rgba(212, 175, 55, 0.25)',
-        'gold-lg': '0 0 35px rgba(212, 175, 55, 0.35)',
-        'blue-glow': '0 0 20px rgba(59, 130, 246, 0.25)',
+      transitionTimingFunction: {
+        DEFAULT: 'cubic-bezier(0.22, 1, 0.36, 1)',
+      },
+      transitionDuration: {
+        DEFAULT: '160ms',
       },
     },
   },

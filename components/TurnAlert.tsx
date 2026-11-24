@@ -34,12 +34,12 @@ export default function TurnAlert({ initiative, myTokenId, myName }: TurnAlertPr
       role="status"
       aria-live="assertive"
       onClick={() => setVisible(false)}
-      className="fixed top-20 inset-x-0 mx-auto w-fit max-w-[calc(100vw-2rem)] z-[200] flex items-center gap-3 px-5 py-3 rounded-2xl bg-amber-400 text-slate-950 border-2 border-amber-200 shadow-2xl shadow-amber-500/40 animate-bounce"
+      className="fixed top-20 inset-x-0 mx-auto w-fit max-w-[calc(100vw-2rem)] z-[200] flex items-center gap-3 px-5 py-3 rounded-2xl bg-amber-400 text-slate-950 border-2 border-amber-200 shadow-2xl"
     >
       <Swords size={24} />
       <span className="text-left">
-        <span className="block text-base font-extrabold rpg-font">Tocca a te{myName ? `, ${myName}` : ''}!</span>
-        <span className="block text-xs font-semibold opacity-80">Round {initiative?.round}: è il tuo turno</span>
+        <span className="block text-base font-medium">Tocca a te{myName ? `, ${myName}` : ''}</span>
+        <span className="block text-xs font-medium opacity-80">Round {initiative?.round}: è il tuo turno</span>
       </span>
     </button>
   );
