@@ -313,8 +313,12 @@ export default function GameRoomPage() {
     newSocket.on('background-updated', ({ backgroundUrl }) => {
       setRoom((prev) => {
         if (!prev) return null;
-        return { ...prev, backgroundUrl };
+        return { ...prev, backgroundUrl, backgroundScale: 1 };
       });
+    });
+
+    newSocket.on('background-scale-updated', ({ backgroundScale }: { backgroundScale: number }) => {
+      setRoom((prev) => (prev ? { ...prev, backgroundScale } : null));
     });
 
     // Cambio di scena: la stanza arriva intera (mappa, disegni, nebbia e pedine della nuova scena)

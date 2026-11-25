@@ -773,6 +773,42 @@ test('scene: ognuna ritrova mappa, disegni, nebbia e NPC; le pedine dei giocator
   assert.equal((await ack(pl, 'create-scene', { name: 'X' })).success, false, 'un giocatore non può');
 });
 
+test('mappa ridimensionabile: scala limitata, solo il Master, ricordata per scena', async () => {
+  const dm = client();
+  await ack(dm, 'create-room', { roomId: 'scala', password: 'pw' });
+  const pl = client();
+  await ack(pl, 'join-room', { roomId: 'scala', password: 'pw', playerName: 'A' });
+  const scales = [];
+  pl.on('background-scale-updated', ({ backgroundScale }) => scales.push(backgroundScale));
+
+  dm.emit('update-background', { backgroundUrl: 'data:image/png;base64,TAVERNA' });
+  dm.emit('update-background-scale', { backgroundScale: 1.5 });
+  dm.emit('update-background-scale', { backgroundScale: 0 });
+  dm.emit('update-background-scale', { backgroundScale: 99 });
+  dm.emit('update-background-scale', { backgroundScale: 'tanto' });
+  pl.emit('update-background-scale', { backgroundScale: 3 });
+  await wait(100);
+  assert.deepEqual(scales, [1.5, 0.1, 10], 'valori fuori range limitati, non numeri e giocatori ignorati');
+
+  dm.emit('update-background-scale', { backgroundScale: 2 });
+  await wait(50);
+  const reloads = [];
+  pl.on('room-reloaded', (r) => reloads.push(r));
+  assert.ok((await ack(dm, 'create-scene', { name: 'Dungeon' })).success);
+  await wait(100);
+  assert.equal(reloads.at(-1).backgroundScale, 1, 'la nuova scena parte al 100%');
+
+  assert.ok((await ack(dm, 'switch-scene', { sceneId: 'scena1' })).success);
+  await wait(100);
+  assert.equal(reloads.at(-1).backgroundScale, 2, 'la taverna ritrova la sua scala');
+
+  dm.emit('update-background', { backgroundUrl: 'data:image/png;base64,ALTRA' });
+  await wait(100);
+  dm.emit('update-background-scale', { backgroundScale: 1 });
+  await wait(100);
+  assert.equal(scales.at(-1), 1);
+});
+
 test('scene dopo un riavvio: ogni mappa nel suo file, eliminata con la scena', async () => {
   const dir = tempDir();
   const first = await startServer({ store: createRoomStore(dir, { saveDelayMs: 20 }) });

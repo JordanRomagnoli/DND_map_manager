@@ -93,6 +93,8 @@ const sortInitiativeEntries = (room, entries) => {
 
 // SCENE: la scena attiva vive nei campi della stanza (sfondo, disegni, nebbia, NPC); le altre restano
 // in room.scenes col loro contenuto. Le pedine dei giocatori sono comuni a tutte le scene.
+const MIN_BACKGROUND_SCALE = 0.1;
+const MAX_BACKGROUND_SCALE = 10;
 const newSceneId = () => `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 const ensureScenes = (room) => {
   if (room.scenes?.length) return;
@@ -103,6 +105,7 @@ const switchScene = (room, target) => {
   const current = room.scenes.find((s) => s.id === room.activeSceneId);
   Object.assign(current, {
     backgroundUrl: room.backgroundUrl,
+    backgroundScale: room.backgroundScale,
     drawings: room.drawings,
     fog: room.fog,
     features: room.features,
@@ -110,12 +113,13 @@ const switchScene = (room, target) => {
     npcs: room.tokens.filter((t) => t.type === 'npc'),
   });
   room.backgroundUrl = target.backgroundUrl ?? null;
+  room.backgroundScale = target.backgroundScale ?? 1;
   room.drawings = target.drawings ?? [];
   room.fog = target.fog ?? { enabled: false, areas: [] };
   room.features = target.features ?? [];
   room.ambience = target.ambience ?? null;
   room.tokens = [...room.tokens.filter((t) => t.type !== 'npc'), ...(target.npcs ?? [])];
-  for (const key of ['backgroundUrl', 'drawings', 'fog', 'features', 'ambience', 'npcs']) delete target[key];
+  for (const key of ['backgroundUrl', 'backgroundScale', 'drawings', 'fog', 'features', 'ambience', 'npcs']) delete target[key];
   room.activeSceneId = target.id;
   // gli ingaggi con NPC rimasti nell'altra scena non valgono più
   room.engagements = (room.engagements || []).filter((pair) => pair.every((id) => room.tokens.some((t) => t.id === id)));
@@ -1277,6 +1281,16 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       );
     });
 
+    // RIDIMENSIONAMENTO MAPPA DI SFONDO (Master only): scala dell'immagine rispetto alla griglia
+    socket.on('update-background-scale', ({ backgroundScale } = {}) => {
+      const roomId = socket.roomId;
+      const room = rooms.get(roomId);
+      if (!room || socket.role !== 'MASTER') return;
+      if (typeof backgroundScale !== 'number' || !Number.isFinite(backgroundScale)) return;
+      room.backgroundScale = Math.min(MAX_BACKGROUND_SCALE, Math.max(MIN_BACKGROUND_SCALE, backgroundScale));
+      io.to(roomId).emit('background-scale-updated', { backgroundScale: room.backgroundScale });
+    });
+
     // CARICAMENTO MAPPA DI SFONDO (Master only)
     socket.on('update-background', ({ backgroundUrl }) => {
       const roomId = socket.roomId;
@@ -1284,6 +1298,7 @@ function attachSocketServer(httpServer, { roomIdleTtlMs = ROOM_IDLE_TTL_MS, stor
       if (!room || socket.role !== 'MASTER') return;
 
       room.backgroundUrl = backgroundUrl;
+      room.backgroundScale = 1; // una nuova mappa parte sempre a dimensione originale
       io.to(roomId).emit('background-updated', { backgroundUrl });
 
       createAndBroadcastLog(

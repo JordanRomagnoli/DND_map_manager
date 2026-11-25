@@ -130,6 +130,7 @@ export interface RoomState {
 
   gridVisible: boolean;
   backgroundUrl: string | null; // null = default white grid sheet
+  backgroundScale?: number; // fattore di scala dell'immagine di sfondo (assente = 1)
   tokens: Token[];
   drawings: DrawingStroke[];
   logs?: ActionLogRecord[];
